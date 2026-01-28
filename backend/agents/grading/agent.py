@@ -56,9 +56,11 @@ Grading principles:
     
     def __init__(self, config: Optional[AgentConfig] = None):
         # Use specific model for grading if configured
+        from config import settings
         if config is None:
             config = AgentConfig()
-            config.model_name = "gpt-4-turbo-preview"  # More reliable for grading
+            # Use grading model from settings (respects provider choice)
+            config.model_name = settings.grading_llm_model
         
         super().__init__(config)
         self.parser = DocumentParser()
@@ -140,7 +142,7 @@ IMPROVEMENTS:
             
             # Run grading agent
             result = await self._agent.run(prompt)
-            response = result.data
+            response = str(result.output)
             
             # Parse response
             grading_result = self._parse_grading_response(response, rubric, assignment.max_score)

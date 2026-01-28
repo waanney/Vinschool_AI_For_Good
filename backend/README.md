@@ -89,7 +89,7 @@ Multi-agent AI system for educational support built with PydanticAI, Milvus, and
    **Option 2: Google Gemini**
    ```bash
    DEFAULT_PROVIDER=google
-   GOOGLE_API_KEY=your-gemini-api-key
+   GEMINI_API_KEY=your-gemini-api-key
    DEFAULT_LLM_MODEL=gemini-1.5-pro
    ```
    
@@ -238,7 +238,7 @@ GRADING_LLM_MODEL=gpt-4-turbo-preview
 #### Google Gemini
 ```bash
 DEFAULT_PROVIDER=google
-GOOGLE_API_KEY=your-gemini-key
+GEMINI_API_KEY=your-gemini-key
 DEFAULT_LLM_MODEL=gemini-1.5-pro
 GRADING_LLM_MODEL=gemini-1.5-pro
 ```

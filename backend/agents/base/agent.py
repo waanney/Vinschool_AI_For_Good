@@ -66,11 +66,14 @@ class BaseAgent(ABC):
             )
         
         elif provider == "google" or provider == "gemini":
-            if not settings.google_api_key:
-                raise ValueError("GOOGLE_API_KEY not configured")
+            if not settings.gemini_api_key:
+                raise ValueError("GEMINI_API_KEY not configured in .env")
+            # GeminiModel uses GEMINI_API_KEY from environment
+            # Set it before creating the model
+            import os
+            os.environ['GEMINI_API_KEY'] = settings.gemini_api_key
             return GeminiModel(
                 model_name=self.config.model_name,
-                api_key=settings.google_api_key,
             )
         
         elif provider == "anthropic":

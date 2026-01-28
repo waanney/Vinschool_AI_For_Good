@@ -53,14 +53,15 @@ class Settings(BaseSettings):
     # LLM API Keys
     openai_api_key: Optional[str] = None
     anthropic_api_key: Optional[str] = None
-    google_api_key: Optional[str] = None  # For Gemini
+    gemini_api_key: Optional[str] = None  # For Gemini
     
     # Default LLM Provider
     default_provider: str = "openai"  # openai, google, anthropic
     
     # Embedding Configuration
-    embedding_model: str = "text-embedding-3-small"
-    embedding_dimension: int = 1536
+    embedding_provider: str = "google"  # openai or google
+    embedding_model: str = "gemini-embedding-001"
+    embedding_dimension: int = 768
     
     # Agent Configuration  
     default_llm_model: str = "gpt-4-turbo-preview"  # or gemini-1.5-pro, claude-3-opus

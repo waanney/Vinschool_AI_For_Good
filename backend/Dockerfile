@@ -1,4 +1,4 @@
-# Multi-stage build for Python application with UV
+# Multi-stage build for Python application
 FROM python:3.11-slim as builder
 
 # Install system dependencies for document processing
@@ -8,21 +8,28 @@ RUN apt-get update && apt-get install -y \
     poppler-utils \
     libpq-dev \
     gcc \
-    curl \
     && rm -rf /var/lib/apt/lists/*
-
-# Install uv
-RUN curl -LsSf https://astral.sh/uv/install.sh | sh
-ENV PATH="/root/.cargo/bin:$PATH"
 
 # Set working directory
 WORKDIR /app
 
-# Copy dependency files
+# Copy dependency files and source code
 COPY pyproject.toml ./
+COPY agents ./agents
+COPY api ./api
+COPY config ./config
+COPY database ./database
+COPY domain ./domain
+COPY services ./services
+COPY utils ./utils
+COPY workflow ./workflow
+COPY scripts ./scripts
+COPY __init__.py ./
 
-# Install Python dependencies using uv
-RUN uv pip install --system --no-cache -e .
+# Install Python dependencies
+# Note: Use pip in Docker for simplicity. UV is recommended for local dev.
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -e .
 
 # Production stage
 FROM python:3.11-slim

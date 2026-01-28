@@ -135,7 +135,7 @@ Please provide a clear, helpful answer based on the context above. If the contex
             reasoning = f"Average relevance score: {avg_score:.2f}"
             
             return AnswerResponse(
-                answer=result.data,
+                answer=str(result.output),
                 confidence=avg_score,
                 sources=list(set(sources)),
                 escalate_to_teacher=escalate,
@@ -175,7 +175,7 @@ Provide a clear, structured summary in Vietnamese."""
             
             logger.info(f"Generated summary for {request.target_audience}")
             
-            return result.data
+            return str(result.output)
             
         except Exception as e:
             logger.error(f"Error summarizing content: {e}")
@@ -217,7 +217,7 @@ Format each exercise clearly numbered."""
             result = await self._agent.run(prompt)
             
             # Parse exercises (simple split by numbers)
-            exercises_text = result.data
+            exercises_text = str(result.output)
             exercises = [
                 ex.strip()
                 for ex in exercises_text.split('\n')
