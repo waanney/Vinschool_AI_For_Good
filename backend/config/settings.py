@@ -83,6 +83,24 @@ class Settings(BaseSettings):
     enable_question_routing: bool = True
     teacher_escalation_threshold: float = 0.6
     
+    # Notification Configuration
+    # Email (SMTP) settings
+    SMTP_HOST: str = ""
+    SMTP_PORT: int = 587
+    SMTP_USERNAME: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_USE_TLS: bool = True
+    NOTIFICATION_SENDER_EMAIL: str = "ai-assistant@vinschool.edu.vn"
+    NOTIFICATION_SENDER_NAME: str = "Vinschool AI Assistant"
+    
+    # Google Chat settings
+    GOOGLE_CHAT_WEBHOOK_URL: Optional[str] = None
+    
+    # Notification behavior
+    ENABLE_EMAIL_NOTIFICATIONS: bool = False
+    ENABLE_GOOGLE_CHAT_NOTIFICATIONS: bool = False
+    NOTIFICATION_TIMEOUT: int = 30  # seconds
+    
     # Security
     secret_key: str = "change_me_in_production"
     algorithm: str = "HS256"
@@ -91,3 +109,8 @@ class Settings(BaseSettings):
 
 # Global settings instance (Singleton pattern)
 settings = Settings()
+
+
+def get_settings() -> Settings:
+    """Get the global settings instance."""
+    return settings
