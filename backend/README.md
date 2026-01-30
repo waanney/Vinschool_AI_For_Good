@@ -6,7 +6,7 @@ Multi-agent AI system for educational support built with PydanticAI, Milvus, and
 
 ###  Teaching Assistant Agent
 - **Question Answering**: RAG-based question answering with context retrieval
-- **Content Summarization**: Daily lesson summaries for students and parents  
+- **Content Summarization**: Daily lesson summaries for students and parents
 - **Exercise Generation**: Personalized practice problems based on student level
 - **Smart Escalation**: Automatic routing to teachers for complex questions
 
@@ -21,6 +21,14 @@ Multi-agent AI system for educational support built with PydanticAI, Milvus, and
 - **Handwriting Support**: OCR for handwritten submissions
 - **Detailed Feedback**: Strengths, improvements, and personalized comments
 - **Teacher Override**: Teachers can review and adjust AI grades
+
+### Notification Service
+- **Multi-Channel Delivery**: Email (SMTP) and Google Chat (Webhooks)
+- **Teacher Escalation Alerts**: Automatic notification when AI confidence is low
+- **Homework Notifications**: Alerts for submissions and grading completion
+- **Struggling Student Detection**: Proactive alerts for students needing help
+- **Priority-Based Styling**: Visual distinction for urgent vs routine notifications
+- **Retry Logic**: Automatic retry with exponential backoff for failed deliveries
 
 ## Architecture
 
@@ -49,6 +57,17 @@ Multi-agent AI system for educational support built with PydanticAI, Milvus, and
 │  └──────────────┘  └───────────┘  └──────────┘     │
 └─────────────────────────────────────────────────────┘
                           │
+┌─────────────────────────────────────────────────────┐
+│                    Services                         │
+│  ┌──────────────────────────────────────────────┐   │
+│  │          Notification Service                │   │
+│  │   ┌─────────────┐    ┌──────────────────┐    │   │
+│  │   │   Email     │    │   Google Chat    │    │   │
+│  │   │   (SMTP)    │    │   (Webhooks)     │    │   │
+│  │   └─────────────┘    └──────────────────┘    │   │
+│  └──────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────┘
+                          │
 ┌──────────────────────┬──────────────────────────────┐
 │    Milvus Vector DB  │    PostgreSQL Database       │
 │  (Document Embeddings)│  (Student, Teacher, etc.)   │
@@ -61,7 +80,7 @@ Multi-agent AI system for educational support built with PydanticAI, Milvus, and
 - Docker and Docker Compose
 - **API Key** for one of:
   - OpenAI API key, OR
-  - Google Gemini API key, OR  
+  - Google Gemini API key, OR
   - Anthropic API key
 - (Optional) [uv](https://github.com/astral-sh/uv) for faster Python package management
 
@@ -76,23 +95,23 @@ Multi-agent AI system for educational support built with PydanticAI, Milvus, and
    ```bash
    cp .env.example .env
    ```
-   
+
    Edit `.env` and configure your LLM provider:
-   
+
    **Option 1: OpenAI (default)**
    ```bash
    DEFAULT_PROVIDER=openai
    OPENAI_API_KEY=sk-your-openai-key
    DEFAULT_LLM_MODEL=gpt-4-turbo-preview
    ```
-   
+
    **Option 2: Google Gemini**
    ```bash
    DEFAULT_PROVIDER=google
    GEMINI_API_KEY=your-gemini-api-key
    DEFAULT_LLM_MODEL=gemini-1.5-pro
    ```
-   
+
    **Option 3: Anthropic**
    ```bash
    DEFAULT_PROVIDER=anthropic
@@ -191,6 +210,13 @@ backend/
 ├── domain/               # Domain models (DDD)
 │   ├── models/          # Entities
 │   └── repositories/    # Repository interfaces
+├── services/                       # Business services
+│   └── notification/               # Notification service
+│       ├── models.py               # Notification data models
+│       ├── base.py                 # BaseNotifier interface
+│       ├── email_notifier.py       # SMTP email
+│       ├── google_chat_notifier.py # Google Chat webhooks
+│       └── notification_service.py # Main orchestrator
 ├── utils/                # Utilities
 │   ├── embeddings.py    # Embedding generation
 │   ├── document_parser.py # Document parsing
@@ -211,7 +237,7 @@ backend/
 - **Single Responsibility**: Each agent, service, and repository has one clear purpose
 - **Open/Closed**: Base agent class allows extension without modification
 - **Liskov Substitution**: All agents implement the same interface
-- **Interface Segregation**: Minimal, focused repository interfaces  
+- **Interface Segregation**: Minimal, focused repository interfaces
 - **Dependency Inversion**: Agents depend on repository abstractions
 
 ### Domain-Driven Design
@@ -274,6 +300,30 @@ DEFAULT_LLM_MODEL=gpt-4-turbo-preview
 ENABLE_AUTO_GRADING=true
 TEACHER_ESCALATION_THRESHOLD=0.6
 ```
+
+### Notification Configuration
+
+Enable teacher notifications via email and/or Google Chat:
+
+#### Email (SMTP)
+```bash
+ENABLE_EMAIL_NOTIFICATIONS=true
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USERNAME=your-email@gmail.com
+SMTP_PASSWORD=your-app-password
+SMTP_USE_TLS=true
+NOTIFICATION_SENDER_EMAIL=ai-assistant@vinschool.edu.vn
+NOTIFICATION_SENDER_NAME=Vinschool AI Assistant
+```
+
+#### Google Chat (Webhooks)
+```bash
+ENABLE_GOOGLE_CHAT_NOTIFICATIONS=true
+GOOGLE_CHAT_WEBHOOK_URL=https://chat.googleapis.com/v1/spaces/xxx/messages?key=yyy
+```
+
+**Note:** Teachers can also have individual webhook URLs for their specific chat rooms.
 
 ## Testing
 
