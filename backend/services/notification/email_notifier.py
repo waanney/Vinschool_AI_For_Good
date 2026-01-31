@@ -202,8 +202,9 @@ class EmailNotifier(BaseNotifier):
                     {context_html}
                 </div>
                 <div class="footer">
-                    <p>Vinschool AI Educational Support System</p>
-                    <p>This is an automated notification. Please do not reply directly to this email.</p>
+                    <p><strong>This is an automated notification. Please do not reply to this email.</strong></p>
+                    <p style="margin-top: 10px;">Vinschool AI Educational Support System</p>
+                    <p style="font-size: 11px; color: #999;">To respond to this notification, please log in to the Vinschool platform.</p>
                 </div>
             </div>
         </body>
@@ -319,6 +320,10 @@ class EmailNotifier(BaseNotifier):
 
         lines.extend([
             "---",
+            "",
+            "This is an automated notification. Please do not reply to this email.",
+            "To respond, please log in to the Vinschool platform.",
+            "",
             "Vinschool AI Educational Support System",
         ])
 
