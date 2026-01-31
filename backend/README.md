@@ -325,7 +325,7 @@ SMTP_USERNAME=your-email@gmail.com
 SMTP_PASSWORD=your-app-password # abcdefghijklmnop (no spaces)
 SMTP_USE_TLS=true
 NOTIFICATION_SENDER_EMAIL=your-email@gmail.com  # Must match SMTP_USERNAME for Gmail
-NOTIFICATION_SENDER_NAME=Vinschool AI Assistant (Automated - Do Not Reply)
+NOTIFICATION_SENDER_NAME=Vinschool AI Assistant
 ```
 
 > **Note:** Gmail requires the sender email to match the authenticated account. For a custom sender address like `ai-assistant@vinschool.edu.vn`, use Google Workspace or a transactional email service (SendGrid, Mailgun, Amazon SES).
