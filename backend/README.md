@@ -305,25 +305,92 @@ TEACHER_ESCALATION_THRESHOLD=0.6
 
 Enable teacher notifications via email and/or Google Chat:
 
-#### Email (SMTP)
+#### Email (SMTP) Setup
+
+**Step 1: Get Gmail App Password**
+
+1. Go to [myaccount.google.com](https://myaccount.google.com)
+2. Navigate to **Security & sign-in** → **2-Step Verification** → Turn on 2-Step Verification
+3. Go to [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords)
+4. Type name in **App name**: Vinschool AI (your choice)
+5. Click **Create** and copy the 16-character password (`abcd efgh ijkl mnop`)
+
+**Step 2: Configure `.env`**
+
 ```bash
 ENABLE_EMAIL_NOTIFICATIONS=true
 SMTP_HOST=smtp.gmail.com
 SMTP_PORT=587
 SMTP_USERNAME=your-email@gmail.com
-SMTP_PASSWORD=your-app-password
+SMTP_PASSWORD=your-app-password # abcdefghijklmnop (no spaces)
 SMTP_USE_TLS=true
 NOTIFICATION_SENDER_EMAIL=ai-assistant@vinschool.edu.vn
 NOTIFICATION_SENDER_NAME=Vinschool AI Assistant
 ```
 
-#### Google Chat (Webhooks)
+**Other Email Providers:**
+
+| Provider        | SMTP_HOST           | SMTP_PORT |
+|-----------------|---------------------|-----------|
+| Gmail           | smtp.gmail.com      | 587       |
+| Outlook/Hotmail | smtp.office365.com  | 587       |
+| Yahoo           | smtp.mail.yahoo.com | 587       |
+
+**Step 3: Test Email**
+
 ```bash
-ENABLE_GOOGLE_CHAT_NOTIFICATIONS=true
-GOOGLE_CHAT_WEBHOOK_URL=https://chat.googleapis.com/v1/spaces/xxx/messages?key=yyy
+python scripts/demo_notification.py --email
 ```
 
-**Note:** Teachers can also have individual webhook URLs for their specific chat rooms.
+---
+
+#### Google Chat (Webhooks) Setup
+
+**Step 1: Create a Google Chat Space**
+
+1. Open [Google Chat](https://chat.google.com)
+2. Click **New chat** → **Create a space**
+3. Name your space (e.g., "AI Teacher Notifications")
+
+**Step 2: Create Webhook URL (Business/Education accounts only)**
+
+1. Click on the Space name → **Apps & integrations**
+2. Navigate to **Webhooks** → **Add webhooks**
+3. Name: "Vinschool AI", Avatar URL: (optional)
+4. Click **Save** and copy the webhook URL
+
+**Step 3: Configure `.env`**
+
+```bash
+ENABLE_GOOGLE_CHAT_NOTIFICATIONS=true
+GOOGLE_CHAT_WEBHOOK_URL=https://chat.googleapis.com/v1/spaces/xxx/messages?key=yyy&token=zzz
+```
+
+**Step 4: Test Google Chat**
+
+```bash
+python scripts/demo_notification.py --google-chat
+```
+
+---
+
+#### Testing Notifications
+
+```bash
+# Preview notifications without sending (dry run)
+python scripts/demo_notification.py --dry-run
+
+# Test email only
+python scripts/demo_notification.py --email
+
+# Test Google Chat only
+python scripts/demo_notification.py --google-chat
+
+# Test both channels
+python scripts/demo_notification.py --all
+```
+
+**Note:** Teachers can also have individual webhook URLs stored in their profile for notifications to their specific chat rooms.
 
 ## Testing
 
