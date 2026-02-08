@@ -23,11 +23,11 @@ Multi-agent AI system for educational support built with PydanticAI, Milvus, and
 - **Teacher Override**: Teachers can review and adjust AI grades
 
 ### Notification Service
-- **Multi-Channel Delivery**: Email (SMTP) and Google Chat (Webhooks)
-- **Teacher Escalation Alerts**: Automatic notification when AI confidence is low
-- **Homework Notifications**: Alerts for submissions and grading completion
-- **Struggling Student Detection**: Proactive alerts for students needing help
-- **Priority-Based Styling**: Visual distinction for urgent vs routine notifications
+- **Multi-Channel Delivery**: Email (SMTP), Google Chat (Webhooks), Zalo (stub for demo)
+- **Teacher Escalation**: Automatic email + Google Chat card when AI confidence is low, with link to chat with the student
+- **Low Grade Alert**: Email to teacher when a student scores below threshold (default: 7.0/10.0)
+- **Daily Summary (Students)**: End-of-day lesson recap with homework and links sent to class Google Chat group
+- **Daily Summary (Parents)**: Same content in formal tone sent via Zalo (stub - team will implement frontend)
 - **Retry Logic**: Automatic retry with exponential backoff for failed deliveries
 
 ## Architecture
@@ -61,10 +61,10 @@ Multi-agent AI system for educational support built with PydanticAI, Milvus, and
 │                    Services                         │
 │  ┌──────────────────────────────────────────────┐   │
 │  │          Notification Service                │   │
-│  │   ┌─────────────┐    ┌──────────────────┐    │   │
-│  │   │   Email     │    │   Google Chat    │    │   │
-│  │   │   (SMTP)    │    │   (Webhooks)     │    │   │
-│  │   └─────────────┘    └──────────────────┘    │   │
+│  │   ┌──────────┐  ┌──────────────┐  ┌───────┐  │   │
+│  │   │  Email   │  │ Google Chat  │  │ Zalo  │  │   │
+│  │   │  (SMTP)  │  │ (Webhooks)   │  │(stub) │  │   │
+│  │   └──────────┘  └──────────────┘  └───────┘  │   │
 │  └──────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────┘
                           │
@@ -214,9 +214,10 @@ backend/
 │   └── notification/               # Notification service
 │       ├── models.py               # Notification data models
 │       ├── base.py                 # BaseNotifier interface
-│       ├── email_notifier.py       # SMTP email
-│       ├── google_chat_notifier.py # Google Chat webhooks
-│       └── notification_service.py # Main orchestrator
+│       ├── email_notifier.py       # SMTP email (escalation + low grade)
+│       ├── google_chat_notifier.py # Google Chat webhooks (escalation + daily summary)
+│       ├── zalo_notifier.py        # Zalo OA API (stub for demo)
+│       └── notification_service.py # Main orchestrator + factory methods
 ├── utils/                # Utilities
 │   ├── embeddings.py    # Embedding generation
 │   ├── document_parser.py # Document parsing
@@ -341,10 +342,8 @@ NOTIFICATION_SENDER_NAME=Vinschool AI Assistant
 **Step 3: Test Email**
 
 ```bash
-python scripts/demo_notification.py --email
+python scripts/demo_notification.py --escalation
 ```
-
----
 
 #### Google Chat (Webhooks) Setup
 
@@ -371,24 +370,46 @@ GOOGLE_CHAT_WEBHOOK_URL=https://chat.googleapis.com/v1/spaces/xxx/messages?key=y
 **Step 4: Test Google Chat**
 
 ```bash
-python scripts/demo_notification.py --google-chat
+python scripts/demo_notification.py --escalation
 ```
 
----
+#### Zalo OA Setup (Stub)
+
+Zalo is currently a stub for the demo. The frontend team will fake the Zalo UI.
+When Zalo OA API access is available, configure:
+
+```bash
+ENABLE_ZALO_NOTIFICATIONS=true
+ZALO_OA_ACCESS_TOKEN=your-zalo-oa-access-token
+```
+
+#### Low Grade Threshold
+
+Configure the minimum score (out of 10) that triggers a low grade alert to the teacher:
+
+```bash
+LOW_GRADE_THRESHOLD=7.0  # Students scoring below this get flagged
+```
 
 #### Testing Notifications
 
 ```bash
-# Preview notifications without sending (dry run)
+# Preview all notification types without sending
 python scripts/demo_notification.py --dry-run
 
-# Test email only
-python scripts/demo_notification.py --email
+# Demo teacher escalation (Email + Google Chat)
+python scripts/demo_notification.py --escalation
 
-# Test Google Chat only
-python scripts/demo_notification.py --google-chat
+# Demo low grade alert (Email to teacher)
+python scripts/demo_notification.py --low-grade
 
-# Test both channels
+# Demo daily summary for students (Google Chat)
+python scripts/demo_notification.py --daily-summary
+
+# Demo daily summary for parents (Zalo stub)
+python scripts/demo_notification.py --daily-parent
+
+# Run all feature demos
 python scripts/demo_notification.py --all
 ```
 
