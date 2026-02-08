@@ -1,0 +1,255 @@
+"""
+Milvus Vector Database Client.
+Manages connection and operations with Milvus for document embeddings.
+"""
+
+from typing import List, Optional, Dict, Any
+from pymilvus import (
+    connections,
+    Collection,
+    CollectionSchema,
+    FieldSchema,
+    DataType,
+    utility,
+)
+from loguru import logger
+
+from config import settings
+
+
+class MilvusClient:
+    """
+    Milvus client for vector database operations.
+    Implements Singleton pattern for connection management.
+    """
+    
+    _instance: Optional['MilvusClient'] = None
+    _initialized: bool = False
+    
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
+    
+    def __init__(self):
+        if not self._initialized:
+            self.alias = "default"
+            self.connect()
+            MilvusClient._initialized = True
+    
+    def connect(self) -> None:
+        """Establish connection to Milvus."""
+        try:
+            connections.connect(
+                alias=self.alias,
+                host=settings.milvus_host,
+                port=settings.milvus_port,
+            )
+            logger.info(f"Connected to Milvus at {settings.milvus_host}:{settings.milvus_port}")
+        except Exception as e:
+            logger.error(f"Failed to connect to Milvus: {e}")
+            raise
+    
+    def disconnect(self) -> None:
+        """Close Milvus connection."""
+        try:
+            connections.disconnect(alias=self.alias)
+            logger.info("Disconnected from Milvus")
+        except Exception as e:
+            logger.error(f"Error disconnecting from Milvus: {e}")
+    
+    def create_document_collection(self, collection_name: str) -> Collection:
+        """
+        Create a collection for document embeddings.
+        
+        Args:
+            collection_name: Name of the collection
+            
+        Returns:
+            Created collection instance
+        """
+        full_name = f"{settings.milvus_collection_prefix}_{collection_name}"
+        
+        # Check if collection exists
+        if utility.has_collection(full_name, using=self.alias):
+            logger.info(f"Collection {full_name} already exists")
+            return Collection(name=full_name, using=self.alias)
+        
+        # Define schema
+        fields = [
+            FieldSchema(name="id", dtype=DataType.INT64, is_primary=True, auto_id=True),
+            FieldSchema(name="document_id", dtype=DataType.VARCHAR, max_length=100),
+            FieldSchema(name="chunk_index", dtype=DataType.INT64),
+            FieldSchema(name="text", dtype=DataType.VARCHAR, max_length=5000),
+            FieldSchema(
+                name="embedding",
+                dtype=DataType.FLOAT_VECTOR,
+                dim=settings.embedding_dimension,
+            ),
+            FieldSchema(name="metadata", dtype=DataType.JSON),
+        ]
+        
+        schema = CollectionSchema(
+            fields=fields,
+            description=f"Document embeddings for {collection_name}",
+        )
+        
+        # Create collection
+        collection = Collection(
+            name=full_name,
+            schema=schema,
+            using=self.alias,
+        )
+        
+        logger.info(f"Created collection: {full_name}")
+        
+        # Create index for vector field
+        index_params = {
+            "index_type": "IVF_FLAT",
+            "metric_type": "COSINE",
+            "params": {"nlist": 128},
+        }
+        
+        collection.create_index(
+            field_name="embedding",
+            index_params=index_params,
+        )
+        
+        logger.info(f"Created index for collection: {full_name}")
+        
+        return collection
+    
+    def get_collection(self, collection_name: str) -> Optional[Collection]:
+        """Get existing collection."""
+        full_name = f"{settings.milvus_collection_prefix}_{collection_name}"
+        
+        if not utility.has_collection(full_name, using=self.alias):
+            logger.warning(f"Collection {full_name} does not exist")
+            return None
+        
+        return Collection(name=full_name, using=self.alias)
+    
+    def insert_embeddings(
+        self,
+        collection_name: str,
+        document_ids: List[str],
+        chunk_indices: List[int],
+        texts: List[str],
+        embeddings: List[List[float]],
+        metadata: List[Dict[str, Any]],
+    ) -> List[int]:
+        """
+        Insert document embeddings into collection.
+        
+        Args:
+            collection_name: Target collection name
+            document_ids: List of document UUIDs
+            chunk_indices: Index of chunk within document
+            texts: Text content
+            embeddings: Vector embeddings
+            metadata: Additional metadata (teacher_id, class, subject, etc.)
+            
+        Returns:
+            List of inserted IDs
+        """
+        collection = self.get_collection(collection_name)
+        if collection is None:
+            collection = self.create_document_collection(collection_name)
+        
+        # Prepare data
+        entities = [
+            document_ids,
+            chunk_indices,
+            texts,
+            embeddings,
+            metadata,
+        ]
+        
+        # Insert
+        insert_result = collection.insert(entities)
+        collection.flush()
+        
+        logger.info(
+            f"Inserted {len(document_ids)} embeddings into {collection_name}, "
+            f"IDs: {insert_result.primary_keys[:5]}..."
+        )
+        
+        return insert_result.primary_keys
+    
+    def search(
+        self,
+        collection_name: str,
+        query_embedding: List[float],
+        top_k: int = 5,
+        filters: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """
+        Semantic search in collection.
+        
+        Args:
+            collection_name: Collection to search
+            query_embedding: Query vector
+            top_k: Number of results
+            filters: Optional filter expression (e.g., 'grade == 9')
+            
+        Returns:
+            List of search results with scores
+        """
+        collection = self.get_collection(collection_name)
+        if collection is None:
+            logger.warning(f"Collection {collection_name} not found for search")
+            return []
+        
+        # Load collection to memory
+        collection.load()
+        
+        # Search parameters
+        search_params = {
+            "metric_type": "COSINE",
+            "params": {"nprobe": 16},
+        }
+        
+        # Execute search
+        results = collection.search(
+            data=[query_embedding],
+            anns_field="embedding",
+            param=search_params,
+            limit=top_k,
+            expr=filters,
+            output_fields=["document_id", "chunk_index", "text", "metadata"],
+        )
+        
+        # Format results
+        formatted_results = []
+        for hits in results:
+            for hit in hits:
+                formatted_results.append({
+                    "id": hit.id,
+                    "score": hit.score,
+                    "document_id": hit.entity.get("document_id"),
+                    "chunk_index": hit.entity.get("chunk_index"),
+                    "text": hit.entity.get("text"),
+                    "metadata": hit.entity.get("metadata", {}),
+                })
+        
+        logger.info(f"Search returned {len(formatted_results)} results from {collection_name}")
+        
+        return formatted_results
+    
+    def delete_by_document_id(self, collection_name: str, document_id: str) -> int:
+        """Delete all embeddings for a specific document."""
+        collection = self.get_collection(collection_name)
+        if collection is None:
+            return 0
+        
+        expr = f'document_id == "{document_id}"'
+        collection.delete(expr)
+        collection.flush()
+        
+        logger.info(f"Deleted embeddings for document {document_id} from {collection_name}")
+        
+        return 1  # Milvus doesn't return delete count directly
+
+
+# Global singleton instance
+milvus_client = MilvusClient()
