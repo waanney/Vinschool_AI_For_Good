@@ -1,0 +1,12 @@
+@import "tailwindcss";
+
+@theme {
+  --color-vinschool-blue: #1c398e;
+  --color-vinschool-gold: #fbbd08;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
