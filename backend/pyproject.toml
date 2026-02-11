@@ -1,0 +1,108 @@
+[project]
+name = "vinschool-ai-backend"
+version = "0.1.0"
+description = "Multi-Agent Educational Support System for Vinschool"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    # AI Agent Framework
+    "pydantic-ai>=0.0.13",
+    "pydantic>=2.6.0",
+    "pydantic-settings>=2.1.0",
+    
+    # LLM Providers
+    "openai>=1.12.0",
+    "anthropic>=0.18.0",
+    "google-generativeai>=0.8.0",  # For Gemini embeddings
+    
+    # Vector Database
+    "pymilvus>=2.3.6",
+    
+    # API Framework
+    "fastapi>=0.109.0",
+    "uvicorn[standard]>=0.27.0",
+    "python-multipart>=0.0.9",
+    
+    # Database
+    "sqlalchemy>=2.0.25",
+    "alembic>=1.13.1",
+    "asyncpg>=0.29.0",
+    "psycopg2-binary>=2.9.9",
+    
+    # Document Processing
+    "python-pptx>=0.6.23",
+    "python-docx>=1.1.0",
+    "PyPDF2>=3.0.1",
+    "pytesseract>=0.3.10",
+    "Pillow>=10.2.0",
+    "pdf2image>=1.17.0",
+    
+    # Text Processing & Embeddings
+    "langchain>=0.1.6",
+    "langchain-community>=0.0.20",
+    "langchain-openai>=0.0.5",
+    "sentence-transformers>=2.3.1",
+    "tiktoken>=0.5.2",
+    
+    # Utilities
+    "aiofiles>=23.2.1",
+    "python-dotenv>=1.0.1",
+    "loguru>=0.7.2",
+    "httpx>=0.26.0",
+    "tenacity>=8.2.3",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.4",
+    "pytest-cov>=4.1.0",
+    "black>=24.1.1",
+    "ruff>=0.2.1",
+    "mypy>=1.8.0",
+    "ipython>=8.20.0",
+]
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = [
+    "agents",
+    "agents.base",
+    "agents.teaching_assistant",
+    "agents.content_processor",
+    "agents.grading",
+    "api",
+    "api.routes",
+    "config",
+    "database",
+    "database.repositories",
+    "domain",
+    "domain.models",
+    "domain.repositories",
+    "services",
+    "utils",
+    "workflow",
+    "scripts",
+]
+
+[tool.black]
+line-length = 100
+target-version = ['py310']
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+python_files = ["test_*.py"]

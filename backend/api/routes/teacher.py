@@ -1,0 +1,144 @@
+"""
+Teacher API endpoints.
+Handles teacher-specific operations like uploads and reports.
+"""
+
+from typing import List, Optional
+from uuid import UUID
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException
+from pydantic import BaseModel
+import aiofiles
+from pathlib import Path
+import shutil
+
+from domain.models.document import Document, DocumentType
+from workflow.daily_content_workflow import DailyContentWorkflow
+from utils.logger import logger
+
+router = APIRouter()
+
+
+class UploadResponse(BaseModel):
+    """Response for document upload."""
+    success: bool
+    document_id: str
+    message: str
+    summary: Optional[str] = None
+    exercises: List[str] = []
+
+
+class ReportRequest(BaseModel):
+    """Request for generating reports."""
+    class_name: str
+    subject: str
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+
+
+@router.post("/upload", response_model=UploadResponse)
+async def upload_document(
+    file: UploadFile = File(...),
+    title: str = Form(...),
+    subject: str = Form(...),
+    grade: int = Form(...),
+    teacher_id: str = Form(...),
+    class_name: Optional[str] = Form(None),
+    document_type: str = Form("presentation"),
+    generate_summary: bool = Form(True),
+    generate_exercises: bool = Form(True),
+):
+    """
+    Upload educational content for processing.
+    
+    This endpoint:
+    1. Saves the uploaded file
+    2. Processes and embeds content
+    3. Generates summary and exercises
+    4. Stores in vector database
+    """
+    try:
+        # Validate file type
+        file_extension = Path(file.filename).suffix.lower()
+        allowed_extensions = [".pdf", ".docx", ".pptx", ".jpg", ".jpeg", ".png"]
+        
+        if file_extension not in allowed_extensions:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unsupported file type. Allowed: {', '.join(allowed_extensions)}"
+            )
+        
+        # Save uploaded file
+        upload_dir = Path("uploads") / teacher_id
+        upload_dir.mkdir(parents=True, exist_ok=True)
+        file_path = upload_dir / file.filename
+        
+        async with aiofiles.open(file_path, 'wb') as f:
+            content = await file.read()
+            await f.write(content)
+        
+        logger.info(f"Saved uploaded file: {file_path}")
+        
+        # Create document entity
+        document = Document(
+            title=title,
+            document_type=DocumentType(document_type),
+            file_path=str(file_path),
+            file_extension=file_extension,
+            file_size_bytes=len(content),
+            teacher_id=UUID(teacher_id),
+            class_name=class_name,
+            subject=subject,
+            grade=grade,
+        )
+        
+        # Process through workflow
+        workflow = DailyContentWorkflow()
+        result = await workflow.process_daily_upload(
+            document=document,
+            file_path=str(file_path),
+            generate_summary=generate_summary,
+            generate_exercises=generate_exercises,
+        )
+        
+        if not result["success"]:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Processing failed: {result.get('errors', [])}"
+            )
+        
+        return UploadResponse(
+            success=True,
+            document_id=str(document.id),
+            message="Document processed successfully",
+            summary=result.get("summary"),
+            exercises=result.get("exercises", []),
+        )
+        
+    except Exception as e:
+        logger.error(f"Upload failed: {e}")
+        # Clean up file if it was saved
+        if 'file_path' in locals() and Path(file_path).exists():
+            Path(file_path).unlink()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/reports/{class_name}")
+async def get_class_report(class_name: str, subject: Optional[str] = None):
+    """Get progress report for a class."""
+    # TODO: Implement report generation
+    return {
+        "class_name": class_name,
+        "subject": subject,
+        "message": "Report generation not yet implemented",
+    }
+
+
+@router.get("/questions/escalated")
+async def get_escalated_questions(teacher_id: str):
+    """Get questions that have been escalated to the teacher."""
+    # TODO: Implement escalated question retrieval
+    return {
+        "teacher_id": teacher_id,
+        "questions": [],
+        "message": "Escalated question retrieval not yet implemented",
+    }
