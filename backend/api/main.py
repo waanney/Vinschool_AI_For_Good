@@ -9,7 +9,7 @@ from contextlib import asynccontextmanager
 
 from config import settings
 from database import init_db, close_db
-from api.routes import teacher, student, admin
+from api.routes import teacher, student, admin, zalo
 from utils.logger import logger
 
 
@@ -20,9 +20,9 @@ async def lifespan(app: FastAPI):
     logger.info("Starting Vinschool AI Backend...")
     await init_db()
     logger.info("Database initialized.")
-    
+
     yield
-    
+
     # Shutdown
     logger.info("Shutting down Vinschool AI Backend...")
     await close_db()
@@ -50,6 +50,7 @@ app.add_middleware(
 app.include_router(teacher.router, prefix="/api/teacher", tags=["Teacher"])
 app.include_router(student.router, prefix="/api/student", tags=["Student"])
 app.include_router(admin.router, prefix="/api/admin", tags=["Admin"])
+app.include_router(zalo.router, prefix="/api/zalo", tags=["Zalo"])
 
 
 @app.get("/")
