@@ -1,53 +1,151 @@
 "use client";
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import "@/app/globals.css";
 
+// Backend API base URL
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
+interface LessonData {
+    subject: string;
+    content: string;
+    homework?: string;
+    homework_link?: string;
+    mandatory_assignment?: string;
+    mandatory_assignment_deadline?: string;
+    mandatory_assignment_link?: string;
+    reading_materials_link?: string;
+}
+
+interface BackendMessage {
+    id: string;
+    sender: string;
+    greeting: string;
+    intro: string;
+    lessons: LessonData[];
+    closing: string;
+    time: string;
+    is_ai: boolean;
+}
+
 interface Message {
-    id: number;
+    id: number | string;
     sender: string;
     content: React.ReactNode;
     time: string;
     isAI: boolean;
 }
 
+// Subject color mapping for visual distinction
+const SUBJECT_COLORS: Record<string, { border: string; title: string; decoration: string }> = {
+    "Science": { border: "border-[#0068ff]", title: "text-[#0052cc]", decoration: "decoration-blue-200" },
+    "Toán": { border: "border-[#e11d48]", title: "text-[#be123c]", decoration: "decoration-red-200" },
+    "Tiếng Anh": { border: "border-[#10b981]", title: "text-[#047857]", decoration: "decoration-green-200" },
+};
+
+const DEFAULT_COLOR = { border: "border-[#6366f1]", title: "text-[#4338ca]", decoration: "decoration-indigo-200" };
+
+function getSubjectColor(subject: string) {
+    return SUBJECT_COLORS[subject] || DEFAULT_COLOR;
+}
+
+/** Convert a backend message into a styled React chat bubble */
+function renderBackendMessage(msg: BackendMessage): React.ReactNode {
+    const colors = msg.lessons.map(l => getSubjectColor(l.subject));
+
+    return (
+        <div className="space-y-4">
+            <p className="font-bold text-[15px] mb-3 text-[#002d72] italic">{msg.greeting}</p>
+            <p className="text-[14px] mb-4 text-gray-700">{msg.intro}</p>
+
+            {msg.lessons.map((lesson, i) => {
+                const c = colors[i];
+                return (
+                    <div key={i} className={`pl-3 border-l-[3px] ${c.border}`}>
+                        <p className={`font-bold ${c.title} text-[14px] underline ${c.decoration}`}>Môn {lesson.subject}:</p>
+                        <p className="text-[14px] text-gray-700 mt-1">{lesson.content}</p>
+                        {lesson.homework && <p className="text-[13px] text-gray-600 mt-1">{lesson.homework}</p>}
+                        {lesson.homework_link && (
+                            <p className="text-[12px] text-blue-500 mt-1 italic">📎 {lesson.homework_link}</p>
+                        )}
+                        {lesson.mandatory_assignment && (
+                            <p className="text-[13px] text-gray-600 mt-1 font-medium">{lesson.mandatory_assignment}</p>
+                        )}
+                        {lesson.mandatory_assignment_deadline && (
+                            <p className="text-[12px] text-orange-600 mt-0.5 italic">⏰ {lesson.mandatory_assignment_deadline}</p>
+                        )}
+                    </div>
+                );
+            })}
+
+            <p className="mt-6 pt-3 border-t border-gray-100 font-semibold text-[#002d72] text-[13px] tracking-tighter leading-tight">
+                {msg.closing}
+            </p>
+        </div>
+    );
+}
+
 export const ZaloDesktopChat: React.FC = () => {
     const [inputText, setInputText] = useState("");
     const scrollRef = useRef<HTMLDivElement>(null);
+    const [messages, setMessages] = useState<Message[]>([]);
+    const [loading, setLoading] = useState(true);
+    const fetchedIds = useRef<Set<string>>(new Set());
 
-    // 1. Khởi tạo tin nhắn gốc với nội dung Thuyên muốn giữ
-    const [messages, setMessages] = useState<Message[]>([
-        {
-            id: 1,
-            sender: "AI Assistant",
-            content: (
-                <div className="space-y-4">
-                    <p className="font-bold text-[15px] mb-3 text-[#002d72] italic">Bố mẹ các con thân mến,</p>
-                    <p className="text-[14px] mb-4 text-gray-700">Cô Hana xin gửi nội dung học tập 2 buổi hôm nay của các con ạ:</p>
+    /** Fetch messages from backend and sync (add new + remove deleted) */
+    const fetchMessages = useCallback(async () => {
+        try {
+            const res = await fetch(`${API_BASE}/api/zalo/messages`);
+            if (!res.ok) return;
+            const data = await res.json();
+            const backendMessages = data.messages as BackendMessage[];
+            const backendIds = new Set(backendMessages.map(m => m.id));
 
-                    <div className="pl-3 border-l-[3px] border-[#0068ff]">
-                        <p className="font-bold text-[#0052cc] text-[14px] underline decoration-blue-200">Môn Science:</p>
-                        <p className="text-[14px] text-gray-700 mt-1">Tìm hiểu cơ chế hoạt động của hệ tiêu hoá <span className="font-semibold text-blue-600">"digestive system"</span>.</p>
-                    </div>
+            // If backend has fewer messages (e.g. after DELETE), reset state
+            if (backendMessages.length < fetchedIds.current.size) {
+                fetchedIds.current = new Set(backendIds);
+                setMessages(
+                    backendMessages.map(msg => ({
+                        id: msg.id,
+                        sender: msg.sender,
+                        content: renderBackendMessage(msg),
+                        time: msg.time,
+                        isAI: msg.is_ai,
+                    }))
+                );
+                return;
+            }
 
-                    <div className="pl-3 border-l-[3px] border-[#e11d48]">
-                        <p className="font-bold text-[#be123c] text-[14px] underline decoration-red-200">Môn Toán:</p>
-                        <p className="text-[14px] text-gray-700 mt-1">Cộng và trừ phân số có cùng mẫu số <span className="italic font-medium">"denominator"</span>. Bắt đầu học khác mẫu số.</p>
-                    </div>
+            // Otherwise, append only new messages
+            const newMessages: Message[] = [];
+            for (const msg of backendMessages) {
+                if (!fetchedIds.current.has(msg.id)) {
+                    fetchedIds.current.add(msg.id);
+                    newMessages.push({
+                        id: msg.id,
+                        sender: msg.sender,
+                        content: renderBackendMessage(msg),
+                        time: msg.time,
+                        isAI: msg.is_ai,
+                    });
+                }
+            }
 
-                    <div className="pl-3 border-l-[3px] border-[#10b981]">
-                        <p className="font-bold text-[#047857] text-[14px] underline decoration-green-200">Môn Tiếng Anh:</p>
-                        <p className="text-[14px] text-gray-700 mt-1">Ôn tập câu điều kiện loại 0 <span className="italic">"zero conditional"</span> và câu hỏi đuôi.</p>
-                    </div>
-
-                    <p className="mt-6 pt-3 border-t border-gray-100 font-semibold text-[#002d72] text-[13px] tracking-tighter leading-tight">
-                        Kính mong bố mẹ nhắc nhở các con hoàn thành bài tập đầy đủ giúp cô ạ. Cảm ơn bố mẹ!
-                    </p>
-                </div>
-            ),
-            time: "21:11",
-            isAI: true
+            if (newMessages.length > 0) {
+                setMessages(prev => [...prev, ...newMessages]);
+            }
+        } catch {
+            // Backend not available — silent fail for demo
+        } finally {
+            setLoading(false);
         }
-    ]);
+    }, []);
+
+    // Initial fetch + poll every 3 seconds
+    useEffect(() => {
+        fetchMessages();
+        const interval = setInterval(fetchMessages, 3000);
+        return () => clearInterval(interval);
+    }, [fetchMessages]);
 
     useEffect(() => {
         if (scrollRef.current) {
@@ -118,6 +216,16 @@ export const ZaloDesktopChat: React.FC = () => {
                 {/* Vùng tin nhắn cuộn */}
                 <div ref={scrollRef} className="flex-1 p-8 overflow-y-auto flex flex-col gap-6 no-scrollbar bg-[#f4f7f9]">
                     <div className="text-center"><span className="text-[11px] text-gray-400 font-bold uppercase tracking-widest opacity-60">--- Hôm nay ---</span></div>
+
+                    {loading && messages.length === 0 && (
+                        <div className="text-center text-gray-400 text-sm mt-8">Đang tải tin nhắn...</div>
+                    )}
+
+                    {!loading && messages.length === 0 && (
+                        <div className="text-center text-gray-400 text-sm mt-8">
+                            Chưa có tin nhắn. Gửi thông báo từ backend bằng POST /api/zalo/send-demo
+                        </div>
+                    )}
 
                     {messages.map((msg) => (
                         <div key={msg.id} className={`flex gap-3 ${msg.isAI ? 'self-start' : 'self-end flex-row-reverse'} max-w-[85%]`}>
