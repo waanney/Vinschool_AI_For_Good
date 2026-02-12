@@ -165,6 +165,16 @@ class MilvusClient:
             metadata,
         ]
         
+        # Debug: Print entity structure
+        logger.info(f"Inserting into {collection_name}:")
+        logger.info(f"  document_ids: {len(document_ids)} items")
+        logger.info(f"  chunk_indices: {len(chunk_indices)} items")
+        logger.info(f"  texts: {len(texts)} items")
+        logger.info(f"  embeddings: {len(embeddings)} items")
+        if len(embeddings) > 0:
+            logger.info(f"    First embedding len: {len(embeddings[0]) if isinstance(embeddings[0], list) else 'N/A'}")
+        logger.info(f"  metadata: {len(metadata)} items")
+        
         # Insert
         insert_result = collection.insert(entities)
         collection.flush()

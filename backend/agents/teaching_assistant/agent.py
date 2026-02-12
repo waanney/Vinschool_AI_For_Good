@@ -216,17 +216,40 @@ Format each exercise clearly numbered."""
             
             result = await self._agent.run(prompt)
             
-            # Parse exercises (simple split by numbers)
-            exercises_text = str(result.output)
-            exercises = [
-                ex.strip()
-                for ex in exercises_text.split('\n')
-                if ex.strip() and any(c.isdigit() for c in ex[:3])
+            # Get the full exercise text from AI
+            exercises_text = str(result.output).strip()
+            
+            # Try to split by common Vietnamese exercise patterns
+            # Patterns: "Bài 1:", "Câu 1:", "1.", "Exercise 1:", etc.
+            import re
+            
+            # Split by numbered patterns
+            patterns = [
+                r'\n(?=Bài\s+\d+[:.)])',  # "Bài 1:", "Bài 2:"
+                r'\n(?=Câu\s+\d+[:.)])',  # "Câu 1:", "Câu 2:"
+                r'\n(?=Exercise\s+\d+[:.)])',  # "Exercise 1:"
+                r'\n(?=\d+[.:])',  # "1.", "2:", etc.
             ]
+            
+            exercises = None
+            for pattern in patterns:
+                split_result = re.split(pattern, exercises_text)
+                # Filter out empty strings and whitespace
+                split_result = [ex.strip() for ex in split_result if ex.strip()]
+                
+                # If we got reasonable splits (at least 2 parts), use this pattern
+                if len(split_result) >= 2:
+                    exercises = split_result
+                    break
+            
+            # If no pattern worked, return the whole text as one exercise
+            if not exercises or len(exercises) == 0:
+                logger.warning(f"Could not parse exercises, returning full text")
+                exercises = [exercises_text] if exercises_text else []
             
             logger.info(f"Generated {len(exercises)} personalized exercises for {topic}")
             
-            return exercises[:num_exercises]
+            return exercises[:num_exercises] if exercises else []
             
         except Exception as e:
             logger.error(f"Error generating exercises: {e}")
