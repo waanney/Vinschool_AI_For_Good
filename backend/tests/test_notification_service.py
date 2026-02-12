@@ -5,7 +5,7 @@ Tests cover:
 - Notification models (new types: LOW_GRADE_ALERT, DAILY_SUMMARY)
 - Email notifier (escalation, low grade)
 - Google Chat notifier (escalation, daily summary)
-- Zalo notifier (stub)
+- Zalo notifier (in-memory message store for clone UI)
 - NotificationService factory methods
 - Workflow integration (escalation + low grade alert)
 """
@@ -415,29 +415,72 @@ class TestGoogleChatNotifier:
 
 class TestZaloNotifier:
 
+    @pytest.fixture(autouse=True)
+    def clear_store(self):
+        """Clear the in-memory message store before each test."""
+        from services.notification.zalo_notifier import zalo_message_store
+        zalo_message_store.clear()
+        yield
+        zalo_message_store.clear()
+
     def test_initialization_disabled_by_default(self):
         notifier = ZaloNotifier()
         assert notifier.channel_name == "zalo"
         assert notifier.enabled is False
 
     @pytest.mark.asyncio
-    async def test_validate_config_no_token(self):
+    async def test_validate_config_always_valid_in_demo_mode(self):
+        """In demo mode, config is always valid (uses in-memory store)."""
         notifier = ZaloNotifier()
         valid, error = await notifier.validate_config()
-        assert valid is False
+        assert valid is True
+        assert error is None
 
     @pytest.mark.asyncio
-    async def test_send_stub_returns_success(self, sample_daily_summary_notification):
+    async def test_send_stores_message(self, sample_daily_summary_notification):
+        """Sending a notification stores it in zalo_message_store."""
+        from services.notification.zalo_notifier import zalo_message_store
         notifier = ZaloNotifier(enabled=True)
         result = await notifier.send(sample_daily_summary_notification)
         assert result.success is True
-        assert "STUB" in result.error_message
+        assert result.error_message is None
+        assert result.channel == NotificationChannel.ZALO
+        assert len(zalo_message_store) == 1
 
-    def test_format_daily_summary(self, sample_daily_summary_notification):
-        notifier = ZaloNotifier()
-        text = notifier.format_daily_summary(sample_daily_summary_notification)
-        assert "Bo me" in text
-        assert "Science" in text
+    @pytest.mark.asyncio
+    async def test_stored_message_has_correct_structure(self, sample_daily_summary_notification):
+        """Stored message has the expected keys for the frontend."""
+        from services.notification.zalo_notifier import zalo_message_store
+        notifier = ZaloNotifier(enabled=True)
+        await notifier.send(sample_daily_summary_notification)
+        msg = zalo_message_store[0]
+        assert msg["id"] == sample_daily_summary_notification.notification_id
+        assert msg["sender"] == "AI Assistant"
+        assert msg["greeting"] == "Bố mẹ các con thân mến,"
+        assert msg["is_ai"] is True
+        assert isinstance(msg["lessons"], list)
+        assert len(msg["lessons"]) == 3
+
+    @pytest.mark.asyncio
+    async def test_stored_message_lessons_content(self, sample_daily_summary_notification):
+        """Each lesson in the stored message includes subject and content."""
+        from services.notification.zalo_notifier import zalo_message_store
+        notifier = ZaloNotifier(enabled=True)
+        await notifier.send(sample_daily_summary_notification)
+        lessons = zalo_message_store[0]["lessons"]
+        subjects = [l["subject"] for l in lessons]
+        assert "Science" in subjects
+        assert "Toan" in subjects
+        assert "Tieng Anh" in subjects
+
+    @pytest.mark.asyncio
+    async def test_multiple_sends_accumulate(self, sample_daily_summary_notification):
+        """Multiple sends add to the store."""
+        from services.notification.zalo_notifier import zalo_message_store
+        notifier = ZaloNotifier(enabled=True)
+        await notifier.send(sample_daily_summary_notification)
+        await notifier.send(sample_daily_summary_notification)
+        assert len(zalo_message_store) == 2
 
 
 # ===== Notification Service Tests =====
