@@ -61,10 +61,10 @@ Multi-agent AI system for educational support built with PydanticAI, Milvus, and
 │                    Services                         │
 │  ┌──────────────────────────────────────────────┐   │
 │  │          Notification Service                │   │
-│  │   ┌──────────┐  ┌──────────────┐  ┌───────┐  │   │
-│  │   │  Email   │  │ Google Chat  │  │ Zalo  │  │   │
-│  │   │  (SMTP)  │  │ (Webhooks)   │  │(stub) │  │   │
-│  │   └──────────┘  └──────────────┘  └───────┘  │   │
+│  │  ┌─────────┐  ┌─────────────┐  ┌──────────┐  │   │
+│  │  │  Email  │  │ Google Chat │  │   Zalo   │  │   │
+│  │  │  (SMTP) │  │ (Webhooks)  │  │(clone UI)│  │   │
+│  │  └─────────┘  └─────────────┘  └──────────┘  │   │
 │  └──────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────┘
                           │
@@ -216,7 +216,7 @@ backend/
 │       ├── base.py                 # BaseNotifier interface
 │       ├── email_notifier.py       # SMTP email (escalation + low grade)
 │       ├── google_chat_notifier.py # Google Chat webhooks (escalation + daily summary)
-│       ├── zalo_notifier.py        # Zalo OA API (stub for demo)
+│       ├── zalo_notifier.py        # Zalo clone UI (in-memory store → REST polling)
 │       └── notification_service.py # Main orchestrator + factory methods
 ├── utils/                # Utilities
 │   ├── embeddings.py    # Embedding generation
@@ -373,15 +373,46 @@ GOOGLE_CHAT_WEBHOOK_URL=https://chat.googleapis.com/v1/spaces/xxx/messages?key=y
 python scripts/demo_notification.py --escalation
 ```
 
-#### Zalo OA Setup (Stub)
+#### Zalo Clone UI Demo
 
-Zalo is currently a stub for the demo. The frontend team will fake the Zalo UI.
-When Zalo OA API access is available, configure:
+Zalo notifications are connected to the Zalo clone UI via REST polling.
+The backend stores messages in-memory; the frontend polls `GET /api/zalo/messages` every 3 seconds.
+
+**How it works:**
+- `zalo_notifier.py` formats daily summary content and stores it in `zalo_message_store` (in-memory list)
+- `api/routes/zalo.py` exposes 3 endpoints: `GET /messages`, `POST /send-demo`, `DELETE /messages`
+- Frontend (`ZaloDesktopChat.tsx` / `ZaloMobileChat.tsx`) polls the backend and renders messages
+
+**Demo flow (no Docker/DB needed):**
 
 ```bash
-ENABLE_ZALO_NOTIFICATIONS=true
-ZALO_OA_ACCESS_TOKEN=your-zalo-oa-access-token
+# Terminal 1 — Start standalone Zalo test server (port 8000)
+cd backend
+.\.venv\Scripts\python.exe scripts/run_zalo_server.py
+
+# Terminal 2 — Start frontend (port 3000)
+cd frontend
+npm run dev
 ```
+
+1. Open the Zalo UI: http://localhost:3000/zalo/desktop (or `/zalo/mobile`)
+2. Send a demo notification:
+   ```bash
+   curl -X POST http://localhost:8000/api/zalo/send-demo
+   ```
+   Or open http://localhost:8000/docs and use the Swagger UI.
+3. The message appears in the Zalo clone UI within 3 seconds.
+4. Clear messages: `curl -X DELETE http://localhost:8000/api/zalo/messages`
+
+**API endpoints:**
+
+| Method | Endpoint              | Description                           |
+| ------ | --------------------- | ------------------------------------- |
+| GET    | `/api/zalo/messages`  | List all stored messages              |
+| POST   | `/api/zalo/send-demo` | Send a hardcoded daily summary sample |
+| DELETE | `/api/zalo/messages`  | Clear all messages                    |
+
+> **Note:** This uses an in-memory store — messages are lost when the server restarts. For production, replace with Zalo OA API integration.
 
 #### Low Grade Threshold
 
@@ -406,7 +437,7 @@ python scripts/demo_notification.py --low-grade
 # Demo daily summary for students (Google Chat)
 python scripts/demo_notification.py --daily-summary
 
-# Demo daily summary for parents (Zalo stub)
+# Demo daily summary for parents (Zalo clone UI — needs run_zalo_server.py running)
 python scripts/demo_notification.py --daily-parent
 
 # Run all feature demos
