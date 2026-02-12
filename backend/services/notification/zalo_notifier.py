@@ -1,11 +1,15 @@
 """
-Zalo notification implementation (stub).
+Zalo notification implementation.
 
-This module provides a stub for Zalo notifications.
-The actual Zalo OA API integration will be implemented once the
-team provides the Zalo Official Account credentials and API access.
+This module sends daily summary notifications to the Zalo clone UI
+by storing structured messages in an in-memory store. The frontend
+polls GET /api/zalo/messages to fetch and display them.
 
-Used for: Daily summaries sent to parents' Zalo groups.
+In production, this would be replaced with real Zalo OA API calls.
+For this demo, it simulates Zalo delivery by making the message
+available to our clone UI.
+
+Used for: Daily summaries sent to parents via Zalo.
 """
 
 from datetime import datetime
@@ -18,20 +22,22 @@ from .models import (
     Notification,
     NotificationResult,
     NotificationChannel,
+    NotificationType,
 )
+
+
+# In-memory message store (shared with the API route)
+# In production this would be a database table
+zalo_message_store: list[dict] = []
 
 
 class ZaloNotifier(BaseNotifier):
     """
-    Zalo notification channel (stub).
+    Zalo notification channel for the clone UI.
 
-    Will send daily summary messages to parent Zalo groups.
-    Currently a placeholder - actual implementation requires:
-    - Zalo Official Account (OA) credentials
-    - Zalo OA API access token
-    - Parent Zalo user IDs or group IDs
-
-    For demo: the UI will be faked on the frontend side.
+    Instead of calling the real Zalo OA API, this stores formatted
+    messages in zalo_message_store so the frontend can poll them
+    via GET /api/zalo/messages.
     """
 
     def __init__(
@@ -48,76 +54,101 @@ class ZaloNotifier(BaseNotifier):
 
     async def validate_config(self) -> tuple[bool, Optional[str]]:
         """Validate Zalo configuration."""
-        if not self.oa_access_token:
-            return False, "Zalo OA access token is not configured"
+        # For demo mode, always valid since we use the in-memory store
         return True, None
 
     async def send(self, notification: Notification) -> NotificationResult:
         """
-        Send Zalo notification (stub).
+        Send Zalo notification by storing it in the message store.
 
-        Currently logs the notification that would be sent.
-        Actual implementation will use Zalo OA API.
+        The Zalo clone UI polls GET /api/zalo/messages to pick up
+        new messages and render them.
         """
-        logger.info(
-            f"[ZALO STUB] Would send notification to parent: "
-            f"type={notification.notification_type.value}, "
-            f"title={notification.title}"
-        )
+        try:
+            message_data = self._format_message(notification)
+            zalo_message_store.append(message_data)
 
-        # For now, return success to not block the flow
-        # In production, this will actually call Zalo OA API
-        return NotificationResult(
-            notification_id=notification.notification_id,
-            success=True,
-            channel=NotificationChannel.ZALO,
-            sent_at=datetime.now(),
-            error_message="[STUB] Zalo integration not yet implemented",
-        )
+            logger.info(
+                f"[ZALO] Message stored for UI: "
+                f"type={notification.notification_type.value}, "
+                f"title={notification.title}, "
+                f"id={notification.notification_id}"
+            )
 
-    def format_daily_summary(self, notification: Notification) -> str:
+            return NotificationResult(
+                notification_id=notification.notification_id,
+                success=True,
+                channel=NotificationChannel.ZALO,
+                sent_at=datetime.now(),
+            )
+
+        except Exception as e:
+            error_msg = f"Failed to store Zalo message: {str(e)}"
+            logger.error(error_msg)
+            return NotificationResult(
+                notification_id=notification.notification_id,
+                success=False,
+                channel=NotificationChannel.ZALO,
+                error_message=error_msg,
+            )
+
+    def _format_message(self, notification: Notification) -> dict:
         """
-        Format daily summary for Zalo (parent-facing).
+        Format notification into a structured dict for the frontend.
 
-        The Zalo message should be more formal than Google Chat
-        since it's addressed to parents. Example format:
-
-        Bo me cac con than men,
-        Co Hana xin gui noi dung hoc tap 2 buoi hom nay cua cac con a:
-        Mon Science:
-        ...
-        Mon Toan:
-        ...
-        Mon Tieng Anh:
-        ...
-        Kinh mong bo me nhac nho cac con hoan thanh bai tap day du giup co a.
-        Cam on bo me cac con da doc tin a!
+        The frontend renders this as a Zalo chat bubble with:
+        - Greeting ("Bố mẹ các con thân mến,")
+        - Intro line
+        - Per-subject lesson details
+        - Closing line
         """
-        if not notification.daily_summary_context:
-            return notification.message
+        now = datetime.now()
 
-        ctx = notification.daily_summary_context
-        lines = []
+        if notification.notification_type == NotificationType.DAILY_SUMMARY:
+            return self._format_daily_summary(notification, now)
 
-        # Parent-friendly greeting
-        lines.append("Bo me cac con than men,")
-        lines.append(notification.message)
-        lines.append("")
+        # Fallback for other notification types
+        return {
+            "id": notification.notification_id,
+            "sender": "AI Assistant",
+            "greeting": "",
+            "intro": notification.message,
+            "lessons": [],
+            "closing": "",
+            "time": now.strftime("%H:%M"),
+            "is_ai": True,
+        }
 
-        for lesson in ctx.lessons:
-            lines.append(f"Mon {lesson.subject}:")
-            lines.append(lesson.content)
-            if lesson.homework:
-                lines.append(lesson.homework)
-            if lesson.homework_link:
-                lines.append(lesson.homework_link)
-            if lesson.mandatory_assignment:
-                lines.append(lesson.mandatory_assignment)
-            if lesson.mandatory_assignment_link:
-                lines.append(lesson.mandatory_assignment_link)
-            lines.append("")
+    def _format_daily_summary(self, notification: Notification, now: datetime) -> dict:
+        """Format a daily summary notification for parents."""
+        lessons = []
+        closing = "Kính mong bố mẹ nhắc nhở các con hoàn thành bài tập đầy đủ giúp cô ạ. Cảm ơn bố mẹ!"
 
-        lines.append("Kinh mong bo me nhac nho cac con hoan thanh bai tap day du giup co a.")
-        lines.append("Cam on bo me cac con da doc tin a!")
+        if notification.daily_summary_context:
+            ctx = notification.daily_summary_context
 
-        return "\n".join(lines)
+            for lesson in ctx.lessons:
+                lessons.append({
+                    "subject": lesson.subject,
+                    "content": lesson.content,
+                    "homework": lesson.homework,
+                    "homework_link": lesson.homework_link,
+                    "mandatory_assignment": lesson.mandatory_assignment,
+                    "mandatory_assignment_deadline": lesson.mandatory_assignment_deadline,
+                    "mandatory_assignment_link": lesson.mandatory_assignment_link,
+                    "reading_materials_link": lesson.reading_materials_link,
+                })
+
+            if ctx.general_notes:
+                closing = ctx.general_notes
+
+        return {
+            "id": notification.notification_id,
+            "sender": "AI Assistant",
+            "greeting": "Bố mẹ các con thân mến,",
+            "intro": notification.message,
+            "lessons": lessons,
+            "closing": closing,
+            "time": now.strftime("%H:%M"),
+            "is_ai": True,
+        }

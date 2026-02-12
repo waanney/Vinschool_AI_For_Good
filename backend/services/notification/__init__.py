@@ -4,7 +4,7 @@ Notification service package.
 Supported channels:
 - Email (SMTP) - for teacher escalations and low grade alerts
 - Google Chat (Webhooks) - for teacher escalations and daily summaries to students
-- Zalo (stub) - for daily summaries to parents
+- Zalo - for daily summaries to parents (stores messages for clone UI)
 
 Usage:
     from services.notification import get_notification_service, TeacherInfo, StudentInfo
