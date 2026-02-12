@@ -13,6 +13,7 @@ import aiofiles
 from domain.models.assignment import Assignment
 from workflow.question_answering_workflow import QuestionAnsweringWorkflow
 from workflow.homework_grading_workflow import HomeworkGradingWorkflow, GradingCriteria
+from workflow.practice_exercise_workflow import PracticeExerciseWorkflow
 from utils.logger import logger
 
 router = APIRouter()
@@ -35,6 +36,7 @@ class QuestionResponse(BaseModel):
     sources: List[str] = []
 
 
+
 class HomeworkSubmissionResponse(BaseModel):
     """Response for homework submission."""
     success: bool
@@ -42,6 +44,43 @@ class HomeworkSubmissionResponse(BaseModel):
     message: str
     score: Optional[float] = None
     feedback: Optional[str] = None
+
+
+class PracticeExerciseRequest(BaseModel):
+    """Request for personalized practice exercises."""
+    student_id: str
+    grade: int
+    subject: str
+    class_name: Optional[str] = None
+    num_exercises: int = 5
+
+
+class WeakPointInfo(BaseModel):
+    """Information about a detected weak point."""
+    topic: str
+    error_rate: float
+    recent_mistakes: List[str]
+
+
+class ExerciseInfo(BaseModel):
+    """Information about a recommended exercise."""
+    exercise_id: str
+    title: str
+    topic: str
+    difficulty: str
+    description: str
+    max_score: float
+
+
+class PracticeExerciseResponse(BaseModel):
+    """Response with practice exercise recommendations."""
+    student_id: str
+    subject: str
+    grade: int
+    weak_points: List[WeakPointInfo]
+    recommendations: List[ExerciseInfo]
+    success: bool
+    error: Optional[str] = None
 
 
 @router.post("/question", response_model=QuestionResponse)
@@ -151,6 +190,7 @@ async def submit_homework(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+
 @router.get("/feedback/{assignment_id}")
 async def get_feedback(assignment_id: str):
     """Get grading feedback for an assignment."""
@@ -159,3 +199,75 @@ async def get_feedback(assignment_id: str):
         "assignment_id": assignment_id,
         "message": "Feedback retrieval not yet implemented",
     }
+
+
+@router.post("/practice-request", response_model=PracticeExerciseResponse)
+async def request_practice_exercises(request: PracticeExerciseRequest):
+    """
+    Request personalized practice exercises based on weak points.
+    
+    The AI will:
+    1. Analyze student's past performance to detect weak points
+    2. Select appropriate exercises from the teacher's pool
+    3. Return targeted practice recommendations
+    
+    Example:
+        ```
+        POST /api/student/practice-request
+        {
+            "student_id": "uuid-here",
+            "grade": 9,
+            "subject": "Mathematics",
+            "num_exercises": 5
+        }
+        ```
+    """
+    try:
+        workflow = PracticeExerciseWorkflow()
+        
+        # TODO: Retrieve student's recent assignments from database
+        # For now, we'll pass None which will trigger general exercise generation
+        result = await workflow.handle_practice_request(
+            student_id=request.student_id,
+            grade=request.grade,
+            subject=request.subject,
+            class_name=request.class_name,
+            num_exercises=request.num_exercises,
+            recent_assignments=None,  # Will be populated from database in production
+        )
+        
+        # Convert to response model
+        weak_points = [
+            WeakPointInfo(
+                topic=wp["topic"],
+                error_rate=wp["error_rate"],
+                recent_mistakes=wp["recent_mistakes"],
+            )
+            for wp in result["weak_points"]
+        ]
+        
+        recommendations = [
+            ExerciseInfo(
+                exercise_id=rec["exercise_id"],
+                title=rec["title"],
+                topic=rec["topic"],
+                difficulty=rec["difficulty"],
+                description=rec["description"],
+                max_score=rec["max_score"],
+            )
+            for rec in result["recommendations"]
+        ]
+        
+        return PracticeExerciseResponse(
+            student_id=result["student_id"],
+            subject=result["subject"],
+            grade=result["grade"],
+            weak_points=weak_points,
+            recommendations=recommendations,
+            success=result["success"],
+            error=result.get("error"),
+        )
+        
+    except Exception as e:
+        logger.error(f"Practice request failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

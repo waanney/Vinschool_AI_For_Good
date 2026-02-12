@@ -25,31 +25,69 @@ from uuid import uuid4
 
 async def demo_teaching_assistant():
     """Demo 1: Teaching Assistant - Question Answering"""
-    print("\n" + "="*60)
-    print("🎓 DEMO 1: TEACHING ASSISTANT - QUESTION ANSWERING")
-    print("="*60)
+    from rich.console import Console
+    from rich.panel import Panel
+    from rich.table import Table
+    from rich.text import Text
+    from rich import box
+    
+    console = Console()
+    
+    console.print("\n")
+    console.print(Panel.fit(
+        "[bold cyan]🎓 TEACHING ASSISTANT - QUESTION ANSWERING[/bold cyan]",
+        border_style="cyan",
+        box=box.DOUBLE
+    ))
     
     agent = TeachingAssistantAgent()
     
     # Test question
     context = QuestionContext(
-        question="How do I add fractions with different denominators?",
+        question="Làm thế nào để cộng các phân số có mẫu số khác nhau?",
         student_id="demo-student-001",
         grade=9,
         subject="Mathematics",
         class_name="9A1"
     )
     
-    print(f"\n📝 Question: {context.question}")
-    print(f"👤 Student: Grade {context.grade}, Subject: {context.subject}")
-    print("\n⏳ Generating answer...")
+    # Display question
+    question_panel = Panel(
+        f"[bold white]{context.question}[/bold white]\n\n"
+        f"[dim]👤 Học sinh: Lớp {context.grade} | Môn: {context.subject}[/dim]",
+        title="[bold yellow]📝 CÂU HỎI[/bold yellow]",
+        border_style="yellow",
+        box=box.ROUNDED
+    )
+    console.print(question_panel)
+    
+    console.print("\n[dim]⏳ Đang tạo câu trả lời...[/dim]")
     
     response = await agent.answer_question(context)
     
-    print(f"\n✅ Answer:\n{response.answer}")
-    print(f"\n📊 Confidence: {response.confidence:.2%}")
-    print(f"🔗 Sources: {', '.join(response.sources) if response.sources else 'No sources (knowledge base empty)'}")
-    print(f"⚠️  Escalate to teacher: {'Yes' if response.escalate_to_teacher else 'No'}")
+    # Create results table
+    results_table = Table(show_header=False, box=box.SIMPLE, padding=(0, 1))
+    results_table.add_column("Label", style="cyan bold", no_wrap=True)
+    results_table.add_column("Value")
+    
+    results_table.add_row("📊 Độ tin cậy:", f"[green]{response.confidence:.1%}[/green]")
+    results_table.add_row(
+        "🔗 Nguồn:", 
+        f"[yellow]{', '.join(response.sources) if response.sources else 'Chưa có dữ liệu trong knowledge base'}[/yellow]"
+    )
+    results_table.add_row(
+        "⚠️  Chuyển giáo viên:", 
+        f"[red]Có[/red]" if response.escalate_to_teacher else f"[green]Không[/green]"
+    )
+    
+    # Display answer
+    answer_panel = Panel(
+        f"[white]{response.answer}[/white]\n\n{results_table}",
+        title="[bold green]✅ TRẢ LỜI[/bold green]",
+        border_style="green",
+        box=box.ROUNDED
+    )
+    console.print(answer_panel)
     
     return response
 

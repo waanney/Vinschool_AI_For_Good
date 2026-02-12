@@ -61,18 +61,18 @@ async def _generate_openai_embeddings(texts: List[str]) -> List[List[float]]:
 
 async def _generate_gemini_embeddings(texts: List[str]) -> List[List[float]]:
     """Generate embeddings using Google Gemini API."""
-    # Gemini only supports models/embedding-001 for embeddings
     embeddings = []
     
     for text in texts:
         result = genai.embed_content(
-            model="gemini-embedding-001",  # Fixed - Gemini's only supported embedding model
+            model="models/text-embedding-004",  # Latest model with configurable dimensions
             content=text,
             task_type="retrieval_document",
+            output_dimensionality=768,  # Match Milvus schema (768 instead of default 768)
         )
         embeddings.append(result['embedding'])
     
-    logger.info(f"Generated {len(embeddings)} embeddings using Gemini text-embedding-004")
+    logger.info(f"Generated {len(embeddings)} embeddings using Gemini text-embedding-004 (768-dim)")
     
     return embeddings
 
@@ -93,10 +93,10 @@ def chunk_text(text: str, chunk_size: int = 1000, overlap: int = 200) -> List[st
         overlap: Overlap characters between chunks
         
     Returns:
-        List of text chunks
+        List of text chunks (empty chunks filtered out)
     """
     if len(text) <= chunk_size:
-        return [text]
+        return [text.strip()] if text.strip() else []
     
     chunks = []
     start = 0
@@ -113,9 +113,14 @@ def chunk_text(text: str, chunk_size: int = 1000, overlap: int = 200) -> List[st
                     end = start + last_sep + len(sep)
                     break
         
-        chunks.append(text[start:end].strip())
+        chunk = text[start:end].strip()
+        
+        # Only add non-empty chunks
+        if chunk:
+            chunks.append(chunk)
+        
         start = end - overlap
     
-    logger.debug(f"Split text into {len(chunks)} chunks")
+    logger.debug(f"Split text into {len(chunks)} non-empty chunks")
     
     return chunks
