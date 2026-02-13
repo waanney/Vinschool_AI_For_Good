@@ -1,57 +1,136 @@
 "use client";
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import "@/app/globals.css";
+
+// Backend API base URL
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
+interface LessonData {
+    subject: string;
+    content: string;
+    homework?: string;
+    homework_link?: string;
+    mandatory_assignment?: string;
+    mandatory_assignment_deadline?: string;
+    mandatory_assignment_link?: string;
+    reading_materials_link?: string;
+}
+
+interface BackendMessage {
+    id: string;
+    sender: string;
+    greeting: string;
+    intro: string;
+    lessons: LessonData[];
+    closing: string;
+    time: string;
+    is_ai: boolean;
+}
 
 // Định nghĩa cấu trúc tin nhắn
 interface Message {
-    id: number;
+    id: number | string;
     sender: string;
     content: React.ReactNode;
     time: string;
     isAI: boolean;
 }
 
+/** Convert a backend message into a styled mobile chat bubble */
+function renderBackendMessage(msg: BackendMessage): React.ReactNode {
+    return (
+        <div className="space-y-2 text-[14px] leading-[1.6]">
+            <p className="font-bold text-gray-900">{msg.greeting}</p>
+            <p>{msg.intro}</p>
+
+            {msg.lessons.map((lesson, i) => (
+                <div key={i}>
+                    <strong className="text-blue-700">Môn {lesson.subject}:</strong>
+                    <p>{lesson.content}</p>
+                    {lesson.homework && <p className="text-[13px] text-gray-600">{lesson.homework}</p>}
+                    {lesson.homework_link && (
+                        <p className="text-[12px] bg-blue-50 p-2 rounded mt-1 border border-blue-100 italic">
+                            📎 {lesson.homework_link}
+                        </p>
+                    )}
+                    {lesson.mandatory_assignment && (
+                        <p className="text-[13px] text-gray-600 font-medium">{lesson.mandatory_assignment}</p>
+                    )}
+                    {lesson.mandatory_assignment_deadline && (
+                        <p className="text-[12px] text-orange-600 italic">⏰ {lesson.mandatory_assignment_deadline}</p>
+                    )}
+                </div>
+            ))}
+
+            <p className="font-bold text-[#002d72] pt-2 border-t border-gray-100 text-[12px]">
+                {msg.closing}
+            </p>
+        </div>
+    );
+}
+
 export const ZaloMobileChat: React.FC = () => {
     const [inputText, setInputText] = useState("");
     const scrollRef = useRef<HTMLDivElement>(null);
+    const [messages, setMessages] = useState<Message[]>([]);
+    const [loading, setLoading] = useState(true);
+    const fetchedIds = useRef<Set<string>>(new Set());
 
-    // 1. Khởi tạo danh sách tin nhắn với nội dung bài học từ ảnh mẫu
-    const [messages, setMessages] = useState<Message[]>([
-        {
-            id: 1,
-            sender: "AI Assistant",
-            content: (
-                <div className="space-y-2 text-[14px] leading-[1.6]">
-                    <p className="font-bold text-gray-900">Bố mẹ các con thân mến,</p>
-                    <p>Cô Hana xin gửi nội dung học tập buổi hôm nay của các con ạ:</p>
+    /** Fetch messages from backend and sync (add new + remove deleted) */
+    const fetchMessages = useCallback(async () => {
+        try {
+            const res = await fetch(`${API_BASE}/api/zalo/messages`);
+            if (!res.ok) return;
+            const data = await res.json();
+            const backendMessages = data.messages as BackendMessage[];
+            const backendIds = new Set(backendMessages.map(m => m.id));
 
-                    <div>
-                        <strong className="text-blue-700">Môn Science:</strong>
-                        <p>Tìm hiểu về cơ chế hoạt động của hệ tiêu hoá <span className="italic font-medium">"digestive system"</span>.</p>
-                    </div>
+            // If backend has fewer messages (e.g. after DELETE), reset state
+            if (backendMessages.length < fetchedIds.current.size) {
+                fetchedIds.current = new Set(backendIds);
+                setMessages(
+                    backendMessages.map(msg => ({
+                        id: msg.id,
+                        sender: msg.sender,
+                        content: renderBackendMessage(msg),
+                        time: msg.time,
+                        isAI: msg.is_ai,
+                    }))
+                );
+                return;
+            }
 
-                    <div>
-                        <strong className="text-blue-700">Môn Toán:</strong>
-                        <p>Ôn tập phép cộng và trừ phân số có cùng mẫu số <span className="italic">"denominator"</span>.</p>
-                        <p className="text-[12px] bg-blue-50 p-2 rounded mt-1 border border-blue-100 italic">
-                            📝 vinschool.edu.vn/math_unit9
-                        </p>
-                    </div>
+            // Otherwise, append only new messages
+            const newMessages: Message[] = [];
+            for (const msg of backendMessages) {
+                if (!fetchedIds.current.has(msg.id)) {
+                    fetchedIds.current.add(msg.id);
+                    newMessages.push({
+                        id: msg.id,
+                        sender: msg.sender,
+                        content: renderBackendMessage(msg),
+                        time: msg.time,
+                        isAI: msg.is_ai,
+                    });
+                }
+            }
 
-                    <div>
-                        <strong className="text-blue-700">Môn Tiếng Anh:</strong>
-                        <p>Câu điều kiện loại 0 <span className="italic">"zero conditional"</span>.</p>
-                    </div>
-
-                    <p className="font-bold text-[#002d72] pt-2 border-t border-gray-100 text-[12px]">
-                        Kính mong bố mẹ nhắc nhở các con hoàn thành bài tập đầy đủ giúp cô ạ. Cảm ơn bố mẹ!
-                    </p>
-                </div>
-            ),
-            time: "21:11",
-            isAI: true
+            if (newMessages.length > 0) {
+                setMessages(prev => [...prev, ...newMessages]);
+            }
+        } catch {
+            // Backend not available — silent fail for demo
+        } finally {
+            setLoading(false);
         }
-    ]);
+    }, []);
+
+    // Initial fetch + poll every 3 seconds
+    useEffect(() => {
+        fetchMessages();
+        const interval = setInterval(fetchMessages, 3000);
+        return () => clearInterval(interval);
+    }, [fetchMessages]);
 
     // Tự động cuộn xuống dưới cùng khi có tin nhắn mới
     useEffect(() => {
@@ -104,6 +183,14 @@ export const ZaloMobileChat: React.FC = () => {
                 <div className="text-center my-2">
                     <span className="text-[10px] bg-gray-300/50 px-2 py-0.5 rounded-full text-gray-500 font-bold uppercase">Hôm nay</span>
                 </div>
+
+                {loading && messages.length === 0 && (
+                    <div className="text-center text-gray-400 text-sm mt-4">Đang tải...</div>
+                )}
+
+                {!loading && messages.length === 0 && (
+                    <div className="text-center text-gray-400 text-xs mt-4">Chưa có tin nhắn</div>
+                )}
 
                 {messages.map((msg) => (
                     <div key={msg.id} className={`${msg.isAI ? 'self-start max-w-[95%]' : 'self-end max-w-[85%]'}`}>

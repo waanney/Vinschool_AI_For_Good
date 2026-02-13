@@ -6,7 +6,7 @@ Multi-agent AI system for educational support built with PydanticAI, Milvus, and
 
 ###  Teaching Assistant Agent
 - **Question Answering**: RAG-based question answering with context retrieval
-- **Content Summarization**: Daily lesson summaries for students and parents  
+- **Content Summarization**: Daily lesson summaries for students and parents
 - **Exercise Generation**: Personalized practice problems based on student level
 - **Smart Escalation**: Automatic routing to teachers for complex questions
 
@@ -21,6 +21,14 @@ Multi-agent AI system for educational support built with PydanticAI, Milvus, and
 - **Handwriting Support**: OCR for handwritten submissions
 - **Detailed Feedback**: Strengths, improvements, and personalized comments
 - **Teacher Override**: Teachers can review and adjust AI grades
+
+### Notification Service
+- **Multi-Channel Delivery**: Email (SMTP), Google Chat (Webhooks), Zalo (stub for demo)
+- **Teacher Escalation**: Automatic email + Google Chat card when AI confidence is low, with link to chat with the student
+- **Low Grade Alert**: Email to teacher when a student scores below threshold (default: 7.0/10.0)
+- **Daily Summary (Students)**: End-of-day lesson recap with homework and links sent to class Google Chat group
+- **Daily Summary (Parents)**: Same content in formal tone sent via Zalo (stub - team will implement frontend)
+- **Retry Logic**: Automatic retry with exponential backoff for failed deliveries
 
 ## Architecture
 
@@ -49,6 +57,17 @@ Multi-agent AI system for educational support built with PydanticAI, Milvus, and
 │  └──────────────┘  └───────────┘  └──────────┘     │
 └─────────────────────────────────────────────────────┘
                           │
+┌─────────────────────────────────────────────────────┐
+│                    Services                         │
+│  ┌──────────────────────────────────────────────┐   │
+│  │          Notification Service                │   │
+│  │  ┌─────────┐  ┌─────────────┐  ┌──────────┐  │   │
+│  │  │  Email  │  │ Google Chat │  │   Zalo   │  │   │
+│  │  │  (SMTP) │  │ (Webhooks)  │  │(clone UI)│  │   │
+│  │  └─────────┘  └─────────────┘  └──────────┘  │   │
+│  └──────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────┘
+                          │
 ┌──────────────────────┬──────────────────────────────┐
 │    Milvus Vector DB  │    PostgreSQL Database       │
 │  (Document Embeddings)│  (Student, Teacher, etc.)   │
@@ -61,7 +80,7 @@ Multi-agent AI system for educational support built with PydanticAI, Milvus, and
 - Docker and Docker Compose
 - **API Key** for one of:
   - OpenAI API key, OR
-  - Google Gemini API key, OR  
+  - Google Gemini API key, OR
   - Anthropic API key
 - (Optional) [uv](https://github.com/astral-sh/uv) for faster Python package management
 
@@ -76,23 +95,23 @@ Multi-agent AI system for educational support built with PydanticAI, Milvus, and
    ```bash
    cp .env.example .env
    ```
-   
+
    Edit `.env` and configure your LLM provider:
-   
+
    **Option 1: OpenAI (default)**
    ```bash
    DEFAULT_PROVIDER=openai
    OPENAI_API_KEY=sk-your-openai-key
    DEFAULT_LLM_MODEL=gpt-4-turbo-preview
    ```
-   
+
    **Option 2: Google Gemini**
    ```bash
    DEFAULT_PROVIDER=google
    GEMINI_API_KEY=your-gemini-api-key
    DEFAULT_LLM_MODEL=gemini-1.5-pro
    ```
-   
+
    **Option 3: Anthropic**
    ```bash
    DEFAULT_PROVIDER=anthropic
@@ -191,6 +210,14 @@ backend/
 ├── domain/               # Domain models (DDD)
 │   ├── models/          # Entities
 │   └── repositories/    # Repository interfaces
+├── services/                       # Business services
+│   └── notification/               # Notification service
+│       ├── models.py               # Notification data models
+│       ├── base.py                 # BaseNotifier interface
+│       ├── email_notifier.py       # SMTP email (escalation + low grade)
+│       ├── google_chat_notifier.py # Google Chat webhooks (escalation + daily summary)
+│       ├── zalo_notifier.py        # Zalo clone UI (in-memory store → REST polling)
+│       └── notification_service.py # Main orchestrator + factory methods
 ├── utils/                # Utilities
 │   ├── embeddings.py    # Embedding generation
 │   ├── document_parser.py # Document parsing
@@ -211,7 +238,7 @@ backend/
 - **Single Responsibility**: Each agent, service, and repository has one clear purpose
 - **Open/Closed**: Base agent class allows extension without modification
 - **Liskov Substitution**: All agents implement the same interface
-- **Interface Segregation**: Minimal, focused repository interfaces  
+- **Interface Segregation**: Minimal, focused repository interfaces
 - **Dependency Inversion**: Agents depend on repository abstractions
 
 ### Domain-Driven Design
@@ -274,6 +301,150 @@ DEFAULT_LLM_MODEL=gpt-4-turbo-preview
 ENABLE_AUTO_GRADING=true
 TEACHER_ESCALATION_THRESHOLD=0.6
 ```
+
+### Notification Configuration
+
+Enable teacher notifications via email and/or Google Chat:
+
+#### Email (SMTP) Setup
+
+**Step 1: Get Gmail App Password**
+
+1. Go to [myaccount.google.com](https://myaccount.google.com)
+2. Navigate to **Security & sign-in** → **2-Step Verification** → Turn on 2-Step Verification
+3. Go to [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords)
+4. Type name in **App name**: Vinschool AI (your choice)
+5. Click **Create** and copy the 16-character password (`abcd efgh ijkl mnop`)
+
+**Step 2: Configure `.env`**
+
+```bash
+ENABLE_EMAIL_NOTIFICATIONS=true
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USERNAME=your-email@gmail.com
+SMTP_PASSWORD=your-app-password # abcdefghijklmnop (no spaces)
+SMTP_USE_TLS=true
+NOTIFICATION_SENDER_EMAIL=your-email@gmail.com  # Must match SMTP_USERNAME for Gmail
+NOTIFICATION_SENDER_NAME=Vinschool AI Assistant
+```
+
+> **Note:** Gmail requires the sender email to match the authenticated account. For a custom sender address like `ai-assistant@vinschool.edu.vn`, use Google Workspace or a transactional email service (SendGrid, Mailgun, Amazon SES).
+
+**Other Email Providers:**
+
+| Provider        | SMTP_HOST           | SMTP_PORT |
+|-----------------|---------------------|-----------|
+| Gmail           | smtp.gmail.com      | 587       |
+| Outlook/Hotmail | smtp.office365.com  | 587       |
+| Yahoo           | smtp.mail.yahoo.com | 587       |
+
+**Step 3: Test Email**
+
+```bash
+python scripts/demo_notification.py --escalation
+```
+
+#### Google Chat (Webhooks) Setup
+
+**Step 1: Create a Google Chat Space**
+
+1. Open [Google Chat](https://chat.google.com)
+2. Click **New chat** → **Create a space**
+3. Name your space (e.g., "AI Teacher Notifications")
+
+**Step 2: Create Webhook URL (Business/Education accounts only)**
+
+1. Click on the Space name → **Apps & integrations**
+2. Navigate to **Webhooks** → **Add webhooks**
+3. Name: "Vinschool AI", Avatar URL: (optional)
+4. Click **Save** and copy the webhook URL
+
+**Step 3: Configure `.env`**
+
+```bash
+ENABLE_GOOGLE_CHAT_NOTIFICATIONS=true
+GOOGLE_CHAT_WEBHOOK_URL=https://chat.googleapis.com/v1/spaces/xxx/messages?key=yyy&token=zzz
+```
+
+**Step 4: Test Google Chat**
+
+```bash
+python scripts/demo_notification.py --escalation
+```
+
+#### Zalo Clone UI Demo
+
+Zalo notifications are connected to the Zalo clone UI via REST polling.
+The backend stores messages in-memory; the frontend polls `GET /api/zalo/messages` every 3 seconds.
+
+**How it works:**
+- `zalo_notifier.py` formats daily summary content and stores it in `zalo_message_store` (in-memory list)
+- `api/routes/zalo.py` exposes 3 endpoints: `GET /messages`, `POST /send-demo`, `DELETE /messages`
+- Frontend (`ZaloDesktopChat.tsx` / `ZaloMobileChat.tsx`) polls the backend and renders messages
+
+**Demo flow (no Docker/DB needed):**
+
+```bash
+# Terminal 1 — Start standalone Zalo test server (port 8000)
+cd backend
+.\.venv\Scripts\python.exe scripts/run_zalo_server.py
+
+# Terminal 2 — Start frontend (port 3000)
+cd frontend
+npm run dev
+```
+
+1. Open the Zalo UI: http://localhost:3000/zalo/desktop (or `/zalo/mobile`)
+2. Send a demo notification:
+   ```bash
+   curl -X POST http://localhost:8000/api/zalo/send-demo
+   ```
+   Or open http://localhost:8000/docs and use the Swagger UI.
+3. The message appears in the Zalo clone UI within 3 seconds.
+4. Clear messages: `curl -X DELETE http://localhost:8000/api/zalo/messages`
+
+**API endpoints:**
+
+| Method | Endpoint              | Description                           |
+| ------ | --------------------- | ------------------------------------- |
+| GET    | `/api/zalo/messages`  | List all stored messages              |
+| POST   | `/api/zalo/send-demo` | Send a hardcoded daily summary sample |
+| DELETE | `/api/zalo/messages`  | Clear all messages                    |
+
+> **Note:** This uses an in-memory store — messages are lost when the server restarts. For production, replace with Zalo OA API integration.
+
+#### Low Grade Threshold
+
+Configure the minimum score (out of 10) that triggers a low grade alert to the teacher:
+
+```bash
+LOW_GRADE_THRESHOLD=7.0  # Students scoring below this get flagged
+```
+
+#### Testing Notifications
+
+```bash
+# Preview all notification types without sending
+python scripts/demo_notification.py --dry-run
+
+# Demo teacher escalation (Email + Google Chat)
+python scripts/demo_notification.py --escalation
+
+# Demo low grade alert (Email to teacher)
+python scripts/demo_notification.py --low-grade
+
+# Demo daily summary for students (Google Chat)
+python scripts/demo_notification.py --daily-summary
+
+# Demo daily summary for parents (Zalo clone UI — needs run_zalo_server.py running)
+python scripts/demo_notification.py --daily-parent
+
+# Run all feature demos
+python scripts/demo_notification.py --all
+```
+
+**Note:** Teachers can also have individual webhook URLs stored in their profile for notifications to their specific chat rooms.
 
 ## Testing
 
