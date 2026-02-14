@@ -5,24 +5,10 @@ import "@/app/globals.css";
 // Backend API base URL
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
-interface LessonData {
-    subject: string;
-    content: string;
-    homework?: string;
-    homework_link?: string;
-    mandatory_assignment?: string;
-    mandatory_assignment_deadline?: string;
-    mandatory_assignment_link?: string;
-    reading_materials_link?: string;
-}
-
 interface BackendMessage {
     id: string;
     sender: string;
-    greeting: string;
-    intro: string;
-    lessons: LessonData[];
-    closing: string;
+    text: string;
     time: string;
     is_ai: boolean;
 }
@@ -35,51 +21,23 @@ interface Message {
     isAI: boolean;
 }
 
-// Subject color mapping for visual distinction
-const SUBJECT_COLORS: Record<string, { border: string; title: string; decoration: string }> = {
-    "Science": { border: "border-[#0068ff]", title: "text-[#0052cc]", decoration: "decoration-blue-200" },
-    "Toán": { border: "border-[#e11d48]", title: "text-[#be123c]", decoration: "decoration-red-200" },
-    "Tiếng Anh": { border: "border-[#10b981]", title: "text-[#047857]", decoration: "decoration-green-200" },
-};
-
-const DEFAULT_COLOR = { border: "border-[#6366f1]", title: "text-[#4338ca]", decoration: "decoration-indigo-200" };
-
-function getSubjectColor(subject: string) {
-    return SUBJECT_COLORS[subject] || DEFAULT_COLOR;
-}
-
-/** Convert a backend message into a styled React chat bubble */
+/** Convert a backend plain-text message into a styled React chat bubble */
 function renderBackendMessage(msg: BackendMessage): React.ReactNode {
-    const colors = msg.lessons.map(l => getSubjectColor(l.subject));
+    // Split the text by newlines and render each line, preserving blank lines as spacing
+    const lines = msg.text.split('\n');
 
     return (
-        <div className="space-y-4">
-            <p className="font-bold text-[15px] mb-3 text-[#002d72] italic">{msg.greeting}</p>
-            <p className="text-[14px] mb-4 text-gray-700">{msg.intro}</p>
-
-            {msg.lessons.map((lesson, i) => {
-                const c = colors[i];
+        <div className="space-y-1">
+            {lines.map((line, i) => {
+                if (line.trim() === '') {
+                    return <div key={i} className="h-2" />;
+                }
                 return (
-                    <div key={i} className={`pl-3 border-l-[3px] ${c.border}`}>
-                        <p className={`font-bold ${c.title} text-[14px] underline ${c.decoration}`}>Môn {lesson.subject}:</p>
-                        <p className="text-[14px] text-gray-700 mt-1">{lesson.content}</p>
-                        {lesson.homework && <p className="text-[13px] text-gray-600 mt-1">{lesson.homework}</p>}
-                        {lesson.homework_link && (
-                            <p className="text-[12px] text-blue-500 mt-1 italic">📎 {lesson.homework_link}</p>
-                        )}
-                        {lesson.mandatory_assignment && (
-                            <p className="text-[13px] text-gray-600 mt-1 font-medium">{lesson.mandatory_assignment}</p>
-                        )}
-                        {lesson.mandatory_assignment_deadline && (
-                            <p className="text-[12px] text-orange-600 mt-0.5 italic">⏰ {lesson.mandatory_assignment_deadline}</p>
-                        )}
-                    </div>
+                    <p key={i} className="text-[14px] text-gray-700 leading-relaxed whitespace-pre-wrap">
+                        {line}
+                    </p>
                 );
             })}
-
-            <p className="mt-6 pt-3 border-t border-gray-100 font-semibold text-[#002d72] text-[13px] tracking-tighter leading-tight">
-                {msg.closing}
-            </p>
         </div>
     );
 }

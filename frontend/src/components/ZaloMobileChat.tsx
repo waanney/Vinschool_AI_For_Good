@@ -5,24 +5,10 @@ import "@/app/globals.css";
 // Backend API base URL
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
-interface LessonData {
-    subject: string;
-    content: string;
-    homework?: string;
-    homework_link?: string;
-    mandatory_assignment?: string;
-    mandatory_assignment_deadline?: string;
-    mandatory_assignment_link?: string;
-    reading_materials_link?: string;
-}
-
 interface BackendMessage {
     id: string;
     sender: string;
-    greeting: string;
-    intro: string;
-    lessons: LessonData[];
-    closing: string;
+    text: string;
     time: string;
     is_ai: boolean;
 }
@@ -36,35 +22,22 @@ interface Message {
     isAI: boolean;
 }
 
-/** Convert a backend message into a styled mobile chat bubble */
+/** Convert a backend plain-text message into a styled mobile chat bubble */
 function renderBackendMessage(msg: BackendMessage): React.ReactNode {
+    const lines = msg.text.split('\n');
+
     return (
-        <div className="space-y-2 text-[14px] leading-[1.6]">
-            <p className="font-bold text-gray-900">{msg.greeting}</p>
-            <p>{msg.intro}</p>
-
-            {msg.lessons.map((lesson, i) => (
-                <div key={i}>
-                    <strong className="text-blue-700">Môn {lesson.subject}:</strong>
-                    <p>{lesson.content}</p>
-                    {lesson.homework && <p className="text-[13px] text-gray-600">{lesson.homework}</p>}
-                    {lesson.homework_link && (
-                        <p className="text-[12px] bg-blue-50 p-2 rounded mt-1 border border-blue-100 italic">
-                            📎 {lesson.homework_link}
-                        </p>
-                    )}
-                    {lesson.mandatory_assignment && (
-                        <p className="text-[13px] text-gray-600 font-medium">{lesson.mandatory_assignment}</p>
-                    )}
-                    {lesson.mandatory_assignment_deadline && (
-                        <p className="text-[12px] text-orange-600 italic">⏰ {lesson.mandatory_assignment_deadline}</p>
-                    )}
-                </div>
-            ))}
-
-            <p className="font-bold text-[#002d72] pt-2 border-t border-gray-100 text-[12px]">
-                {msg.closing}
-            </p>
+        <div className="space-y-1 text-[14px] leading-[1.6]">
+            {lines.map((line, i) => {
+                if (line.trim() === '') {
+                    return <div key={i} className="h-2" />;
+                }
+                return (
+                    <p key={i} className="whitespace-pre-wrap">
+                        {line}
+                    </p>
+                );
+            })}
         </div>
     );
 }
