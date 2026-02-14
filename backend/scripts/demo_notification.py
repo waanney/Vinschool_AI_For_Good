@@ -13,6 +13,7 @@ Usage (feature-based):
 
 import asyncio
 import argparse
+import httpx
 
 import sys
 from pathlib import Path
@@ -26,7 +27,6 @@ from services.notification import (
     ParentInfo,
     NotificationChannel,
     NotificationType,
-    LessonSummary,
     Notification,
 )
 from config.settings import get_settings
@@ -72,11 +72,13 @@ def print_notification_preview(notification: Notification):
         print(f"   Assignment: {ctx.assignment_title}")
         print(f"   Score:      {ctx.score}/{ctx.max_score} (threshold: {ctx.threshold})")
 
-    if notification.daily_summary_context:
-        ctx = notification.daily_summary_context
-        print(f"   Date: {ctx.date}")
-        for lesson in ctx.lessons:
-            print(f"     - {lesson.subject}: {lesson.content[:50]}...")
+    if notification.notification_type == NotificationType.DAILY_SUMMARY:
+        # The full message already contains greeting + content + closing
+        print(f"   Full text preview:")
+        for line in notification.message.split('\n')[:6]:
+            print(f"     {line}")
+        if notification.message.count('\n') > 6:
+            print(f"     ... ({notification.message.count(chr(10)) - 6} more lines)")
 
 
 def print_results(results, label: str = ""):
@@ -124,28 +126,21 @@ def get_sample_parent() -> ParentInfo:
     )
 
 
-def get_sample_lessons() -> list[LessonSummary]:
-    return [
-        LessonSummary(
-            subject="Science",
-            content='Cac con lam thi nghiem de tim hieu ve co che hoat dong cua he tieu hoa "digestive system".',
-            homework="Hom qua co Oanh da phat mot phieu bai tap mon Science, cac con hoan thanh va nop lai cho co vao thu hai (12/01) nhe.",
-            homework_link="https://drive.google.com/drive/folders/1NRTD6RqkqZD7BJMuKbYtK8lQA93ouHma?usp=drive_link",
-        ),
-        LessonSummary(
-            subject="Toan",
-            content='Cac con on tap ve phep tinh cong va tru phan so co cung mau so "denominator". Cac con bat dau hoc ve cong va tru phan so khac mau so "denominator". Vi du nhu: 1/2 + 1/4; 1/3 - 1/6;...',
-            homework="Co gui lai phieu Toan + Tieng Anh ma co da phat trong tuan nay cho cac con:",
-            homework_link="https://drive.google.com/drive/folders/13VGznRDf_VggXSkonI-SeGztkLri0bXI?usp=drive_link",
-            mandatory_assignment="Bai tap Toan trong workbook tuan nay cua cac con la: Unit 9.1, pages 93-97",
-            mandatory_assignment_deadline="han nop thu Ba 13/01",
-        ),
-        LessonSummary(
-            subject="Tieng Anh",
-            content='Cac con on tap lai cau dieu kien loai 0 "zero conditional" va cau hoi duoi "question tag".',
-            homework_link="https://classroom.google.com/c/ODAzMTk4Mzg1ODc5/a/ODI0MTg2MTAwMDQ5/details",
-        ),
-    ]
+# Sample AI-generated summary text (plain text, no structured fields)
+SAMPLE_AI_SUMMARY = (
+    "1. Mon Science:\n"
+    "Cac con lam thi nghiem de tim hieu ve co che hoat dong cua he tieu hoa \"digestive system\".\n"
+    "Hom qua co Oanh da phat mot phieu bai tap mon Science, cac con hoan thanh va nop lai cho co vao thu hai nhe.\n"
+    "📎 https://drive.google.com/drive/folders/1NRTD6RqkqZD7BJMuKbYtK8lQA93ouHma\n\n"
+    "2. Mon Toan:\n"
+    "Cac con on tap ve phep tinh cong va tru phan so co cung mau so \"denominator\".\n"
+    "Bai tap Toan trong workbook tuan nay: Unit 9.1, pages 93-97\n"
+    "⏰ han nop thu Ba 13/01\n"
+    "📎 https://drive.google.com/drive/folders/13VGznRDf_VggXSkonI-SeGztkLri0bXI\n\n"
+    "3. Mon Tieng Anh:\n"
+    "Cac con on tap lai cau dieu kien loai 0 \"zero conditional\" va cau hoi duoi \"question tag\".\n"
+    "📎 https://classroom.google.com/c/ODAzMTk4Mzg1ODc5/a/ODI0MTg2MTAwMDQ5/details"
+)
 
 
 # ===== Feature Demos =====
@@ -308,8 +303,7 @@ async def demo_daily_summary_students():
     notification = service.create_daily_summary_for_students(
         student=student,
         date="2026-01-12",
-        lessons=get_sample_lessons(),
-        general_notes="Cac con nho hoan thanh bai tap day du nhe!",
+        content=SAMPLE_AI_SUMMARY,
     )
     print_notification_preview(notification)
 
@@ -325,15 +319,18 @@ async def demo_daily_summary_students():
 
 async def demo_daily_summary_parents():
     """
-    FEATURE: Daily Summary for Parents (Zalo - stub)
+    FEATURE: Daily Summary for Parents (Zalo clone UI)
     Same content but more formal tone, sent via Zalo.
+    Messages appear in the Zalo clone UI at /zalo/desktop.
     """
-    print_header("FEATURE: Daily Summary (Parents -> Zalo)")
+    print_header("FEATURE: Daily Summary (Parents -> Zalo clone UI)")
     print("""
   Scenario: Same school day summary, sent to parents via Zalo.
-  NOTE: Zalo is a STUB - will log but not actually send.
+  The demo POSTs to the running Zalo server so the message
+  appears in the Zalo clone UI.
 
-  This is a placeholder for when Zalo OA API is integrated.
+  To see it: open http://localhost:3000/zalo/desktop
+  (requires run_zalo_server.py running on port 8000)
     """)
 
     service = get_service()
@@ -344,16 +341,28 @@ async def demo_daily_summary_parents():
         parent=parent,
         student=student,
         date="2026-01-12",
-        lessons=get_sample_lessons(),
+        content=SAMPLE_AI_SUMMARY,
     )
     print_notification_preview(notification)
 
-    print(f"\n  Sending daily summary via Zalo (stub)...")
-    results = await service.send(notification)
-    print_results(results, f"-> Zalo (parent: {parent.name})")
+    # POST to the running Zalo server so the message appears in the UI
+    # (the in-memory store lives in the server process, not this script)
+    server_url = "http://localhost:8000/api/zalo/send-daily-summary"
+    print(f"\n  POSTing to {server_url}...")
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(server_url, json={"content": SAMPLE_AI_SUMMARY})
+            resp.raise_for_status()
+            data = resp.json()
+            print(f"  -> Success! notification_id={data.get('notification_id', 'N/A')}")
+    except httpx.ConnectError:
+        print("  [ERROR] Cannot connect to http://localhost:8000")
+        print("          Start the server first: python -m scripts.run_zalo_server")
+    except Exception as e:
+        print(f"  [ERROR] {e}")
 
     print("\n  Daily summary (parents) demo complete!")
-    print("  Note: Zalo is a stub. Team will implement the real UI later.")
+    print("  Check the Zalo clone UI at http://localhost:3000/zalo/desktop")
 
 
 async def demo_dry_run():
@@ -387,13 +396,12 @@ async def demo_dry_run():
         ("3. Daily Summary - Students (Google Chat)",
          service.create_daily_summary_for_students(
             student=student, date="2026-01-12",
-            lessons=get_sample_lessons(),
-            general_notes="Cac con nho hoan thanh bai tap day du nhe!",
+            content=SAMPLE_AI_SUMMARY,
          )),
-        ("4. Daily Summary - Parents (Zalo stub)",
+        ("4. Daily Summary - Parents (Zalo clone UI)",
          service.create_daily_summary_for_parents(
             parent=parent, student=student, date="2026-01-12",
-            lessons=get_sample_lessons(),
+            content=SAMPLE_AI_SUMMARY,
          )),
     ]
 
