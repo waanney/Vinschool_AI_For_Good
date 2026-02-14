@@ -390,12 +390,12 @@ class TestGoogleChatNotifier:
         assert button_found
 
     def test_create_daily_summary_message(self, sample_daily_summary_notification):
+        """Daily summary message passes through notification.message as plain text."""
         notifier = GoogleChatNotifier()
         msg = notifier._create_daily_summary_message(sample_daily_summary_notification)
         assert "text" in msg
-        assert "Science" in msg["text"]
-        assert "Toan" in msg["text"]
-        assert "Tieng Anh" in msg["text"]
+        # The message text should match the notification's message field directly
+        assert msg["text"] == sample_daily_summary_notification.message
 
     def test_create_low_grade_card(self, sample_low_grade_notification):
         notifier = GoogleChatNotifier()
@@ -449,29 +449,27 @@ class TestZaloNotifier:
 
     @pytest.mark.asyncio
     async def test_stored_message_has_correct_structure(self, sample_daily_summary_notification):
-        """Stored message has the expected keys for the frontend."""
+        """Stored message has the expected plain-text keys for the frontend."""
         from services.notification.zalo_notifier import zalo_message_store
         notifier = ZaloNotifier(enabled=True)
         await notifier.send(sample_daily_summary_notification)
         msg = zalo_message_store[0]
         assert msg["id"] == sample_daily_summary_notification.notification_id
         assert msg["sender"] == "AI Assistant"
-        assert msg["greeting"] == "Bố mẹ các con thân mến,"
         assert msg["is_ai"] is True
-        assert isinstance(msg["lessons"], list)
-        assert len(msg["lessons"]) == 3
+        assert "text" in msg
+        assert isinstance(msg["text"], str)
+        assert msg["text"] == sample_daily_summary_notification.message
 
     @pytest.mark.asyncio
-    async def test_stored_message_lessons_content(self, sample_daily_summary_notification):
-        """Each lesson in the stored message includes subject and content."""
+    async def test_stored_message_contains_notification_text(self, sample_daily_summary_notification):
+        """The stored message text matches the notification message."""
         from services.notification.zalo_notifier import zalo_message_store
         notifier = ZaloNotifier(enabled=True)
         await notifier.send(sample_daily_summary_notification)
-        lessons = zalo_message_store[0]["lessons"]
-        subjects = [l["subject"] for l in lessons]
-        assert "Science" in subjects
-        assert "Toan" in subjects
-        assert "Tieng Anh" in subjects
+        msg = zalo_message_store[0]
+        assert msg["text"] == sample_daily_summary_notification.message
+        assert len(msg["text"]) > 0
 
     @pytest.mark.asyncio
     async def test_multiple_sends_accumulate(self, sample_daily_summary_notification):
@@ -558,33 +556,36 @@ class TestNotificationService:
     def test_create_daily_summary_for_students(self, mock_settings, sample_student):
         NotificationService._instance = None
         service = NotificationService()
-        lessons = [
-            LessonSummary(subject="Math", content="Fractions"),
-            LessonSummary(subject="English", content="Grammar"),
-        ]
+        ai_summary = "Hom nay cac con hoc mon Toan va Tieng Anh."
         notification = service.create_daily_summary_for_students(
             student=sample_student,
             date="2026-01-12",
-            lessons=lessons,
+            content=ai_summary,
         )
         assert notification.notification_type == NotificationType.DAILY_SUMMARY
         assert notification.channel == NotificationChannel.GOOGLE_CHAT
-        assert notification.daily_summary_context is not None
-        assert len(notification.daily_summary_context.lessons) == 2
+        # Full message should contain greeting + content + closing
+        assert ai_summary in notification.message
+        assert "Các con thân mến" in notification.message
+        assert "hoàn thành bài tập" in notification.message
 
     def test_create_daily_summary_for_parents(self, mock_settings, sample_parent, sample_student):
         NotificationService._instance = None
         service = NotificationService()
-        lessons = [LessonSummary(subject="Math", content="Fractions")]
+        ai_summary = "Hom nay cac con hoc mon Toan va Tieng Anh."
         notification = service.create_daily_summary_for_parents(
             parent=sample_parent,
             student=sample_student,
             date="2026-01-12",
-            lessons=lessons,
+            content=ai_summary,
         )
         assert notification.notification_type == NotificationType.DAILY_SUMMARY
         assert notification.channel == NotificationChannel.ZALO
         assert notification.parent is not None
+        # Full message should contain greeting + content + closing
+        assert ai_summary in notification.message
+        assert "Bố mẹ các con thân mến" in notification.message
+        assert "Cảm ơn bố mẹ" in notification.message
 
     @pytest.mark.asyncio
     async def test_send_notification_email_only(self, mock_settings, sample_escalation_notification):

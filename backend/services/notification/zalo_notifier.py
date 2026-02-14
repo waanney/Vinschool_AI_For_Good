@@ -2,12 +2,16 @@
 Zalo notification implementation.
 
 This module sends daily summary notifications to the Zalo clone UI
-by storing structured messages in an in-memory store. The frontend
+by storing plain-text messages in an in-memory store. The frontend
 polls GET /api/zalo/messages to fetch and display them.
 
 In production, this would be replaced with real Zalo OA API calls.
 For this demo, it simulates Zalo delivery by making the message
 available to our clone UI.
+
+The notification message should already contain the full formatted
+text (greeting + AI summary content + closing). The notifier simply
+stores it as-is for the frontend to render.
 
 Used for: Daily summaries sent to parents via Zalo.
 """
@@ -22,11 +26,11 @@ from .models import (
     Notification,
     NotificationResult,
     NotificationChannel,
-    NotificationType,
 )
 
 
 # In-memory message store (shared with the API route)
+# Each entry: {"id": str, "sender": str, "text": str, "time": str, "is_ai": bool}
 # In production this would be a database table
 zalo_message_store: list[dict] = []
 
@@ -35,9 +39,12 @@ class ZaloNotifier(BaseNotifier):
     """
     Zalo notification channel for the clone UI.
 
-    Instead of calling the real Zalo OA API, this stores formatted
+    Instead of calling the real Zalo OA API, this stores plain-text
     messages in zalo_message_store so the frontend can poll them
     via GET /api/zalo/messages.
+
+    The `notification.message` field is expected to contain the full
+    formatted text (greeting + content + closing) ready for display.
     """
 
     def __init__(
@@ -62,7 +69,7 @@ class ZaloNotifier(BaseNotifier):
         Send Zalo notification by storing it in the message store.
 
         The Zalo clone UI polls GET /api/zalo/messages to pick up
-        new messages and render them.
+        new messages and render them as plain text.
         """
         try:
             message_data = self._format_message(notification)
@@ -94,61 +101,18 @@ class ZaloNotifier(BaseNotifier):
 
     def _format_message(self, notification: Notification) -> dict:
         """
-        Format notification into a structured dict for the frontend.
+        Format notification into a plain-text dict for the frontend.
 
-        The frontend renders this as a Zalo chat bubble with:
-        - Greeting ("Bố mẹ các con thân mến,")
-        - Intro line
-        - Per-subject lesson details
-        - Closing line
+        The frontend renders this as a Zalo chat bubble showing the
+        full message text (which already contains greeting + content
+        + closing assembled by NotificationService factory methods).
         """
         now = datetime.now()
 
-        if notification.notification_type == NotificationType.DAILY_SUMMARY:
-            return self._format_daily_summary(notification, now)
-
-        # Fallback for other notification types
         return {
             "id": notification.notification_id,
             "sender": "AI Assistant",
-            "greeting": "",
-            "intro": notification.message,
-            "lessons": [],
-            "closing": "",
-            "time": now.strftime("%H:%M"),
-            "is_ai": True,
-        }
-
-    def _format_daily_summary(self, notification: Notification, now: datetime) -> dict:
-        """Format a daily summary notification for parents."""
-        lessons = []
-        closing = "Kính mong bố mẹ nhắc nhở các con hoàn thành bài tập đầy đủ giúp cô ạ. Cảm ơn bố mẹ!"
-
-        if notification.daily_summary_context:
-            ctx = notification.daily_summary_context
-
-            for lesson in ctx.lessons:
-                lessons.append({
-                    "subject": lesson.subject,
-                    "content": lesson.content,
-                    "homework": lesson.homework,
-                    "homework_link": lesson.homework_link,
-                    "mandatory_assignment": lesson.mandatory_assignment,
-                    "mandatory_assignment_deadline": lesson.mandatory_assignment_deadline,
-                    "mandatory_assignment_link": lesson.mandatory_assignment_link,
-                    "reading_materials_link": lesson.reading_materials_link,
-                })
-
-            if ctx.general_notes:
-                closing = ctx.general_notes
-
-        return {
-            "id": notification.notification_id,
-            "sender": "AI Assistant",
-            "greeting": "Bố mẹ các con thân mến,",
-            "intro": notification.message,
-            "lessons": lessons,
-            "closing": closing,
+            "text": notification.message,
             "time": now.strftime("%H:%M"),
             "is_ai": True,
         }

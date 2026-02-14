@@ -23,11 +23,12 @@ Multi-agent AI system for educational support built with PydanticAI, Milvus, and
 - **Teacher Override**: Teachers can review and adjust AI grades
 
 ### Notification Service
-- **Multi-Channel Delivery**: Email (SMTP), Google Chat (Webhooks), Zalo (stub for demo)
+- **Multi-Channel Delivery**: Email (SMTP), Google Chat (Webhooks), Zalo (clone UI with REST polling)
 - **Teacher Escalation**: Automatic email + Google Chat card when AI confidence is low, with link to chat with the student
 - **Low Grade Alert**: Email to teacher when a student scores below threshold (default: 7.0/10.0)
-- **Daily Summary (Students)**: End-of-day lesson recap with homework and links sent to class Google Chat group
-- **Daily Summary (Parents)**: Same content in formal tone sent via Zalo (stub - team will implement frontend)
+- **Daily Summary (Students)**: AI-generated plain text summary sent to class Google Chat group with greeting/closing templates
+- **Daily Summary (Parents)**: Same AI summary with formal greeting/closing sent to Zalo clone UI
+- **Workflow Integration**: `DailyContentWorkflow` automatically sends notifications after generating the AI summary
 - **Retry Logic**: Automatic retry with exponential backoff for failed deliveries
 
 ## Architecture
@@ -376,19 +377,30 @@ python scripts/demo_notification.py --escalation
 #### Zalo Clone UI Demo
 
 Zalo notifications are connected to the Zalo clone UI via REST polling.
-The backend stores messages in-memory; the frontend polls `GET /api/zalo/messages` every 3 seconds.
+The backend stores plain-text messages in-memory; the frontend polls `GET /api/zalo/messages` every 3 seconds.
 
 **How it works:**
-- `zalo_notifier.py` formats daily summary content and stores it in `zalo_message_store` (in-memory list)
-- `api/routes/zalo.py` exposes 3 endpoints: `GET /messages`, `POST /send-demo`, `DELETE /messages`
-- Frontend (`ZaloDesktopChat.tsx` / `ZaloMobileChat.tsx`) polls the backend and renders messages
+- The `DailyContentWorkflow` generates an AI summary → `NotificationService` wraps it with greeting/closing templates → `ZaloNotifier` stores the full text in `zalo_message_store`
+- `api/routes/zalo.py` exposes endpoints: `GET /messages`, `POST /send-demo`, `POST /send-daily-summary`, `DELETE /messages`
+- Frontend (`ZaloDesktopChat.tsx` / `ZaloMobileChat.tsx`) polls the backend and renders messages as plain text
+
+**Message format:**
+```
+Bố mẹ các con thân mến,
+Cô Hana xin gửi nội dung học tập 2 buổi hôm nay của các con ạ:
+
+<AI-generated summary content here>
+
+Kính mong bố mẹ nhắc nhở các con hoàn thành bài tập đầy đủ giúp cô ạ.
+Cảm ơn bố mẹ các con đã đọc tin ạ!
+```
 
 **Demo flow (no Docker/DB needed):**
 
 ```bash
 # Terminal 1 — Start standalone Zalo test server (port 8000)
 cd backend
-.\.venv\Scripts\python.exe scripts/run_zalo_server.py
+python -m scripts.run_zalo_server
 
 # Terminal 2 — Start frontend (port 3000)
 cd frontend
@@ -400,17 +412,23 @@ npm run dev
    ```bash
    curl -X POST http://localhost:8000/api/zalo/send-demo
    ```
-   Or open http://localhost:8000/docs and use the Swagger UI.
-3. The message appears in the Zalo clone UI within 3 seconds.
-4. Clear messages: `curl -X DELETE http://localhost:8000/api/zalo/messages`
+3. Or send custom AI content:
+   ```bash
+   curl -X POST http://localhost:8000/api/zalo/send-daily-summary \
+     -H "Content-Type: application/json" \
+     -d '{"content": "Hom nay cac con hoc mon Toan va Tieng Anh."}'
+   ```
+4. The message appears in the Zalo clone UI within 3 seconds.
+5. Clear messages: `curl -X DELETE http://localhost:8000/api/zalo/messages`
 
 **API endpoints:**
 
-| Method | Endpoint              | Description                           |
-| ------ | --------------------- | ------------------------------------- |
-| GET    | `/api/zalo/messages`  | List all stored messages              |
-| POST   | `/api/zalo/send-demo` | Send a hardcoded daily summary sample |
-| DELETE | `/api/zalo/messages`  | Clear all messages                    |
+| Method | Endpoint                      | Description                                        |
+| ------ | ----------------------------- | -------------------------------------------------- |
+| GET    | `/api/zalo/messages`          | List all stored messages                           |
+| POST   | `/api/zalo/send-demo`         | Send a hardcoded daily summary sample              |
+| POST   | `/api/zalo/send-daily-summary`| Send AI content wrapped with greeting/closing      |
+| DELETE | `/api/zalo/messages`          | Clear all messages                                 |
 
 > **Note:** This uses an in-memory store — messages are lost when the server restarts. For production, replace with Zalo OA API integration.
 
@@ -437,7 +455,8 @@ python scripts/demo_notification.py --low-grade
 # Demo daily summary for students (Google Chat)
 python scripts/demo_notification.py --daily-summary
 
-# Demo daily summary for parents (Zalo clone UI — needs run_zalo_server.py running)
+# Demo daily summary for parents (Zalo clone UI)
+# Requires run_zalo_server.py running on port 8000 — the demo POSTs to it
 python scripts/demo_notification.py --daily-parent
 
 # Run all feature demos
