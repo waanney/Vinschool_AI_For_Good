@@ -156,49 +156,12 @@ class GoogleChatNotifier(BaseNotifier):
     def _create_daily_summary_message(self, notification: Notification) -> dict:
         """
         Create a plain text message for daily summary (student/parent facing).
-        Matches the format shown in the Google Chat example:
-        - Greeting
-        - Per-subject: lesson content + homework + links
+
+        The notification.message already contains the full formatted text
+        (greeting + AI summary content + closing) assembled by the
+        NotificationService factory methods.
         """
-        if not notification.daily_summary_context:
-            return {"text": notification.message}
-
-        ctx = notification.daily_summary_context
-        lines = []
-
-        # Greeting
-        lines.append(notification.message)
-        lines.append("")
-
-        for lesson in ctx.lessons:
-            # Subject header
-            lines.append(f"*Mon {lesson.subject}:*")
-            # Lesson content
-            lines.append(lesson.content)
-
-            # Homework
-            if lesson.homework:
-                lines.append(lesson.homework)
-            if lesson.homework_link:
-                lines.append(lesson.homework_link)
-
-            # Mandatory assignment
-            if lesson.mandatory_assignment:
-                lines.append(lesson.mandatory_assignment)
-            if lesson.mandatory_assignment_link:
-                lines.append(lesson.mandatory_assignment_link)
-
-            # Reading materials
-            if lesson.reading_materials_link:
-                lines.append(f"Tai lieu doc them: {lesson.reading_materials_link}")
-
-            lines.append("")
-
-        # General notes
-        if ctx.general_notes:
-            lines.append(ctx.general_notes)
-
-        return {"text": "\n".join(lines)}
+        return {"text": notification.message}
 
     def _build_sections(self, notification: Notification) -> list[dict]:
         """Build card sections based on notification type."""
