@@ -1,5 +1,6 @@
 """
-Lightweight standalone server for testing the Zalo notification API.
+Lightweight standalone server for testing the Zalo notification API
+and /ask chat feature.
 
 Run this directly to test the Zalo notifier -> UI connection
 without needing PostgreSQL, Milvus, or other services.
@@ -11,6 +12,7 @@ Usage:
 
 import sys
 import os
+import uuid
 
 # Add backend to path so imports work
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -76,6 +78,92 @@ class SendDailySummaryRequest(BaseModel):
     content: str
     student_name: str = "Alex"
     class_name: str = "4B5"
+
+
+class ChatRequest(BaseModel):
+    """Request body for the /ask chat endpoint."""
+    sender: str = "Phụ huynh Alex"
+    text: str
+
+
+class ChatResponse(BaseModel):
+    """Response from the /ask chat endpoint."""
+    success: bool
+    reply: str = ""
+    is_ask: bool = False
+    error: Optional[str] = None
+    user_msg_id: Optional[str] = None
+    ai_msg_id: Optional[str] = None
+
+
+# ---- shared /chat handler (single source of truth) ----
+
+async def _handle_chat(sender: str, text: str) -> ChatResponse:
+    """
+    Shared /ask chat logic used by both run_zalo_server and api/routes/zalo.py.
+
+    Kept here as a thin wrapper so the standalone script doesn't depend
+    on the full api/ package (which needs PostgreSQL/Milvus init).
+    """
+    now = datetime.now().strftime("%H:%M")
+    text = text.strip()
+    sender = sender.strip()
+
+    # Store user message
+    user_msg_id = f"user-{str(uuid.uuid4())[:8]}"
+    zalo_message_store.append({
+        "id": user_msg_id,
+        "sender": sender,
+        "text": text,
+        "time": now,
+        "is_ai": False,
+    })
+
+    is_ask = text.startswith("/ask")
+    if not is_ask:
+        return ChatResponse(success=True, reply="", is_ask=False, user_msg_id=user_msg_id)
+
+    question = text[4:].strip()
+    if not question:
+        hint = "Vui lòng nhập câu hỏi sau /ask ạ.\nVí dụ: /ask Bài tập Toán tuần này là gì?"
+        ai_msg_id = f"ai-{str(uuid.uuid4())[:8]}"
+        zalo_message_store.append({
+            "id": ai_msg_id,
+            "sender": "Cô Hana (AI)",
+            "text": hint,
+            "time": now,
+            "is_ai": True,
+        })
+        return ChatResponse(success=True, reply=hint, is_ask=True, user_msg_id=user_msg_id, ai_msg_id=ai_msg_id)
+
+    try:
+        from services.chat.chat_service import get_chat_service
+
+        chat_service = get_chat_service()
+        user_id = f"zalo-{sender}"
+        answer = await chat_service.answer(user_id=user_id, question=question, channel="zalo")
+
+        ai_msg_id = f"ai-{str(uuid.uuid4())[:8]}"
+        zalo_message_store.append({
+            "id": ai_msg_id,
+            "sender": "Cô Hana (AI)",
+            "text": answer,
+            "time": datetime.now().strftime("%H:%M"),
+            "is_ai": True,
+        })
+        return ChatResponse(success=True, reply=answer, is_ask=True, user_msg_id=user_msg_id, ai_msg_id=ai_msg_id)
+
+    except Exception as e:
+        error_text = "Xin lỗi, hệ thống AI đang gặp sự cố. Vui lòng thử lại sau ạ."
+        ai_msg_id = f"ai-{str(uuid.uuid4())[:8]}"
+        zalo_message_store.append({
+            "id": ai_msg_id,
+            "sender": "Cô Hana (AI)",
+            "text": error_text,
+            "time": datetime.now().strftime("%H:%M"),
+            "is_ai": True,
+        })
+        return ChatResponse(success=False, reply=error_text, is_ask=True, error=str(e), user_msg_id=user_msg_id, ai_msg_id=ai_msg_id)
 
 
 # ===== Endpoints =====
@@ -166,6 +254,16 @@ async def clear_messages():
     return {"success": True, "message": "Cleared"}
 
 
+@app.post("/api/zalo/chat", response_model=ChatResponse)
+async def chat_ask(request: ChatRequest):
+    """
+    Handle a chat message from the Zalo clone UI.
+
+    If the message starts with '/ask', send to ChatService and return AI response.
+    """
+    return await _handle_chat(request.sender, request.text)
+
+
 @app.get("/")
 async def root():
     return {
@@ -174,6 +272,7 @@ async def root():
             "/api/zalo/messages",
             "/api/zalo/send-demo",
             "/api/zalo/send-daily-summary",
+            "/api/zalo/chat",
         ],
     }
 
@@ -182,6 +281,7 @@ if __name__ == "__main__":
     print("\n🚀 Zalo Test Server starting on http://localhost:8000")
     print("   POST http://localhost:8000/api/zalo/send-demo            -> trigger a demo notification")
     print("   POST http://localhost:8000/api/zalo/send-daily-summary   -> send AI content")
+    print("   POST http://localhost:8000/api/zalo/chat                 -> /ask chat with AI")
     print("   GET  http://localhost:8000/api/zalo/messages             -> see stored messages")
     print("   Then check http://localhost:3000/zalo/desktop            -> see it in the UI\n")
     uvicorn.run(app, host="0.0.0.0", port=8000)
