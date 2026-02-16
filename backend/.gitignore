@@ -45,6 +45,10 @@ ENV/
 .env
 .env.local
 
+# Service account credentials
+credentials/
+*.json.bak
+
 # Logs
 *.log
 logs/
