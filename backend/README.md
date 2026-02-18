@@ -31,6 +31,15 @@ Multi-agent AI system for educational support built with PydanticAI, Milvus, and
 - **Workflow Integration**: `DailyContentWorkflow` automatically sends notifications after generating the AI summary
 - **Retry Logic**: Automatic retry with exponential backoff for failed deliveries
 
+### Interactive Chat Service (Cô Hana)
+- **Channel-Aware AI**: Two separate personas — parent-facing (Zalo) and student-facing (Google Chat)
+- **Zalo `/ask` Command**: Parents type `/ask <question>` in the Zalo clone UI for instant AI answers
+- **Google Chat @mention**: Students @mention the bot in Google Chat for AI help
+- **Message Debouncing**: Rapid messages from the same user are batched (3s quiet window) into a single AI request
+- **Conversation History**: Per-user history (last 10 messages) for contextual follow-ups
+- **Smart Escalation**: Zalo → polite apology only; Google Chat → email to teacher + student notification
+- **Lesson Context**: AI answers are grounded in `data/lesson.txt` content
+
 ## Architecture
 
 ```
@@ -66,6 +75,14 @@ Multi-agent AI system for educational support built with PydanticAI, Milvus, and
 │  │  │  Email  │  │ Google Chat │  │   Zalo   │  │   │
 │  │  │  (SMTP) │  │ (Webhooks)  │  │(clone UI)│  │   │
 │  │  └─────────┘  └─────────────┘  └──────────┘  │   │
+│  └──────────────────────────────────────────────┘   │
+│  ┌──────────────────────────────────────────────┐   │
+│  │        Chat Service (Cô Hana AI)             │   │
+│  │  ┌───────────────┐  ┌────────────────────┐   │   │
+│  │  │ Zalo /ask     │  │ Google Chat @bot   │   │   │
+│  │  │ (parents)     │  │ (students)         │   │   │
+│  │  └───────────────┘  └────────────────────┘   │   │
+│  │        ↕ Debouncer → PydanticAI Agent        │   │
 │  └──────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────┘
                           │
@@ -212,6 +229,10 @@ backend/
 │   ├── models/          # Entities
 │   └── repositories/    # Repository interfaces
 ├── services/                       # Business services
+│   ├── chat/                       # Interactive AI chat (Cô Hana)
+│   │   ├── chat_service.py         # Channel-aware LLM orchestrator
+│   │   ├── debouncer.py            # Per-user message debouncing
+│   │   └── google_chat_listener.py # Pub/Sub consumer + Chat API replier
 │   └── notification/               # Notification service
 │       ├── models.py               # Notification data models
 │       ├── base.py                 # BaseNotifier interface
@@ -428,9 +449,50 @@ npm run dev
 | GET    | `/api/zalo/messages`          | List all stored messages                           |
 | POST   | `/api/zalo/send-demo`         | Send a hardcoded daily summary sample              |
 | POST   | `/api/zalo/send-daily-summary`| Send AI content wrapped with greeting/closing      |
+| POST   | `/api/zalo/chat`              | `/ask` chat with AI (stores user msg + AI reply)   |
 | DELETE | `/api/zalo/messages`          | Clear all messages                                 |
 
 > **Note:** This uses an in-memory store — messages are lost when the server restarts. For production, replace with Zalo OA API integration.
+
+#### Interactive Chat (`/ask` and @mention)
+
+The Chat Service provides bidirectional AI Q&A through two channels:
+
+| Channel      | Audience | Trigger           | Persona              | Escalation Behaviour              |
+| ------------ | -------- | ----------------- | -------------------- | --------------------------------- |
+| Zalo clone   | Parents  | `/ask <question>` | Kính ngữ (formal)    | Apologise — no email              |
+| Google Chat  | Students | @mention bot      | Thân thiện (friendly)| Email teacher + notify student    |
+
+**Zalo `/ask` — test from terminal:**
+
+```bash
+curl -X POST http://localhost:8000/api/zalo/chat \
+  -H "Content-Type: application/json" \
+  -d '{"sender": "Phụ huynh Alex", "text": "/ask Bài tập Toán tuần này là gì?"}'
+```
+
+**Google Chat @mention:** Send `@Vinschool Bot Bài tập Toán tuần này là gì?` in the Google Chat space.
+
+```bash
+cd backend
+python -m scripts.run_google_chat
+```
+
+**Direct ChatService test (no server needed):**
+
+```bash
+cd backend
+python -m scripts.demo_chat         # Direct LLM call
+python -m scripts.demo_chat --http  # Via HTTP (needs running server)
+```
+
+**Teacher Escalation Email:**
+
+When the AI is not confident on Google Chat, an email is sent to `TEACHER_EMAIL`:
+
+```bash
+TEACHER_EMAIL=teacher@vinschool.edu.vn  # Recipient for escalation emails
+```
 
 #### Low Grade Threshold
 
@@ -468,14 +530,17 @@ python scripts/demo_notification.py --all
 ## Testing
 
 ```bash
-# Run tests
-pytest
+# Run all tests (91 tests)
+pytest tests/ -v
 
 # Run with coverage
 pytest --cov=. --cov-report=html
 
-# Run specific test file
-pytest tests/test_agents/test_teaching_assistant.py
+# Run specific test suites
+pytest tests/test_chat_service.py -v           # ChatService (24 tests)
+pytest tests/test_debouncer.py -v              # MessageDebouncer (9 tests)
+pytest tests/test_google_chat_listener.py -v   # GoogleChatListener (9 tests)
+pytest tests/test_notification_service.py -v   # NotificationService (49 tests)
 ```
 
 ## Contributing

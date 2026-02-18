@@ -21,10 +21,25 @@ async def lifespan(app: FastAPI):
     await init_db()
     logger.info("Database initialized.")
 
+    # Start Google Chat Pub/Sub listener (if configured)
+    gchat_listener = None
+    if settings.GOOGLE_CLOUD_PROJECT_ID and settings.GOOGLE_CHAT_PUBSUB_SUBSCRIPTION:
+        try:
+            from services.chat import get_google_chat_listener
+
+            gchat_listener = get_google_chat_listener()
+            gchat_listener.start()
+            logger.info("Google Chat Pub/Sub listener started.")
+        except Exception as e:
+            logger.warning(f"Google Chat listener not started: {e}")
+
     yield
 
     # Shutdown
     logger.info("Shutting down Vinschool AI Backend...")
+    if gchat_listener:
+        gchat_listener.stop()
+        logger.info("Google Chat Pub/Sub listener stopped.")
     await close_db()
     logger.info("Database connections closed.")
 

@@ -90,11 +90,21 @@ class Settings(BaseSettings):
     SMTP_USERNAME: str = ""
     SMTP_PASSWORD: str = ""
     SMTP_USE_TLS: bool = True
+    TEACHER_EMAIL: str = "teacher@vinschool.edu.vn"  # Teacher email for escalations
     NOTIFICATION_SENDER_EMAIL: str = "ai-assistant@vinschool.edu.vn"
     NOTIFICATION_SENDER_NAME: str = "Vinschool AI Assistant"
 
     # Google Chat settings
     GOOGLE_CHAT_WEBHOOK_URL: Optional[str] = None
+
+    # Google Chat Pub/Sub settings (for bidirectional chat — @mention based)
+    GOOGLE_CLOUD_PROJECT_ID: Optional[str] = None
+    GOOGLE_CHAT_PUBSUB_SUBSCRIPTION: Optional[str] = None  # e.g. "projects/my-proj/subscriptions/chat-sub"
+    GOOGLE_APPLICATION_CREDENTIALS: Optional[str] = None  # Path to service account JSON key
+    GOOGLE_CHAT_SPACE_ID: Optional[str] = None  # e.g. "spaces/AAAAxxxxxx"
+
+    # Chat debounce settings
+    CHAT_DEBOUNCE_SECONDS: float = 3.0
 
     # Zalo settings
     ZALO_OA_ACCESS_TOKEN: Optional[str] = None

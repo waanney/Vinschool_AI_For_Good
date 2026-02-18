@@ -112,32 +112,85 @@ export const ZaloMobileChat: React.FC = () => {
         }
     }, [messages]);
 
-    const handleSendMessage = () => {
+    const [isTyping, setIsTyping] = useState(false);
+
+    const handleSendMessage = async () => {
         if (!inputText.trim()) return;
 
-        // Tin nhắn của Phụ huynh
+        const text = inputText.trim();
+
+        // If message starts with /ask, send to backend first and wait for response
+        if (text.startsWith("/ask")) {
+            setInputText("");
+            setIsTyping(true);
+            try {
+                const res = await fetch(`${API_BASE}/api/zalo/chat`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ sender: "Phụ huynh Alex", text }),
+                });
+                if (res.ok) {
+                    const data = await res.json();
+
+                    // Add user message with backend ID
+                    if (data.user_msg_id) {
+                        const userMsg: Message = {
+                            id: data.user_msg_id,
+                            sender: "Phụ huynh",
+                            content: <p className="text-[13.5px]">{text}</p>,
+                            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                            isAI: false
+                        };
+                        setMessages(prev => [...prev, userMsg]);
+                        fetchedIds.current.add(data.user_msg_id);
+                    }
+
+                    // Add AI reply with backend ID
+                    if (data.reply && data.ai_msg_id) {
+                        const aiReply: Message = {
+                            id: data.ai_msg_id,
+                            sender: "Cô Hana (AI)",
+                            content: (
+                                <div className="space-y-1 text-[14px] leading-[1.6]">
+                                    {data.reply.split('\n').map((line: string, i: number) =>
+                                        line.trim() === '' ? <div key={i} className="h-2" /> :
+                                        <p key={i} className="whitespace-pre-wrap">{line}</p>
+                                    )}
+                                </div>
+                            ),
+                            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                            isAI: true
+                        };
+                        setMessages(prev => [...prev, aiReply]);
+                        fetchedIds.current.add(data.ai_msg_id);
+                    }
+                }
+            } catch {
+                const errorReply: Message = {
+                    id: Date.now() + 1,
+                    sender: "Cô Hana (AI)",
+                    content: <p className="text-[13.5px] text-red-600 italic">Không thể kết nối đến AI. Thử lại sau ạ.</p>,
+                    time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                    isAI: true
+                };
+                setMessages(prev => [...prev, errorReply]);
+            } finally {
+                setIsTyping(false);
+            }
+            return;
+        }
+
+        // Regular message (not /ask) - add immediately
         const userMsg: Message = {
             id: Date.now(),
             sender: "Phụ huynh",
-            content: <p className="text-[13.5px]">{inputText}</p>,
+            content: <p className="text-[13.5px]">{text}</p>,
             time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             isAI: false
         };
 
         setMessages(prev => [...prev, userMsg]);
         setInputText("");
-
-        // AI phản hồi tự động sau 1.2 giây
-        setTimeout(() => {
-            const aiReply: Message = {
-                id: Date.now() + 1,
-                sender: "AI Assistant",
-                content: <p className="text-[13.5px] italic text-blue-800">Dạ, hệ thống AI đã nhận thông tin từ phụ huynh ạ! ✨</p>,
-                time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                isAI: true
-            };
-            setMessages(prev => [...prev, aiReply]);
-        }, 1200);
     };
 
     return (
@@ -180,13 +233,25 @@ export const ZaloMobileChat: React.FC = () => {
                         </div>
                     </div>
                 ))}
+
+                {/* Typing indicator */}
+                {isTyping && (
+                    <div className="self-start max-w-[95%]">
+                        <div className="p-4 rounded-2xl shadow-sm border bg-white rounded-tl-none border-gray-100">
+                            <div className="flex items-center gap-1">
+                                <span className="text-[13.5px] text-gray-400 italic">Đang tra cứu</span>
+                                <span className="animate-pulse text-blue-500">...</span>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
 
             {/* Input Mobile */}
             <div className="p-3 bg-white border-t flex items-center gap-3 pb-8">
                 <input
                     className="flex-1 bg-gray-100 rounded-full px-4 py-2 text-sm focus:outline-none placeholder: text-black"
-                    placeholder="Nhập @, tin nhắn đến AI..."
+                    placeholder="Gõ /ask + câu hỏi, ví dụ: /ask Bài tập Toán?"
                     value={inputText}
                     onChange={(e) => setInputText(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}

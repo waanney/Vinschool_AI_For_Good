@@ -3,8 +3,9 @@ Zalo notification API endpoints.
 
 Provides REST endpoints for the Zalo clone UI to fetch plain-text
 messages sent by the notification service. Also includes a demo
-endpoint to trigger a sample daily summary, and a send-daily-summary
-endpoint for wiring the real workflow output.
+endpoint to trigger a sample daily summary, a send-daily-summary
+endpoint for wiring the real workflow output, and a /ask chat
+endpoint for interactive Q&A with the AI assistant.
 """
 
 from datetime import datetime
@@ -201,3 +202,114 @@ async def clear_zalo_messages():
     """Clear all messages from the Zalo message store (for testing)."""
     zalo_message_store.clear()
     return {"success": True, "message": "All Zalo messages cleared"}
+
+
+# ===== Chat /ask endpoint =====
+
+class ChatRequest(BaseModel):
+    """Request body for the /ask chat endpoint."""
+    sender: str = "Phụ huynh Alex"
+    text: str
+
+
+class ChatResponse(BaseModel):
+    """Response from the /ask chat endpoint."""
+    success: bool
+    reply: str = ""
+    is_ask: bool = False
+    error: Optional[str] = None
+    user_msg_id: Optional[str] = None
+    ai_msg_id: Optional[str] = None
+
+
+@router.post("/chat", response_model=ChatResponse)
+async def chat_ask(request: ChatRequest):
+    """
+    Handle a chat message from the Zalo clone UI.
+
+    If the message starts with '/ask', the question is forwarded to
+    the AI assistant (ChatService) and the response is returned.
+    Both the user message and AI reply are stored in zalo_message_store
+    so the UI can display them via polling GET /messages.
+
+    Example:
+        POST /api/zalo/chat
+        {"sender": "Phụ huynh Alex", "text": "/ask Bài tập Toán tuần này là gì?"}
+    """
+    text = request.text.strip()
+    sender = request.sender.strip()
+    now = datetime.now().strftime("%H:%M")
+
+    # Store user message in the message store
+    import uuid
+    user_msg_id = f"user-{str(uuid.uuid4())[:8]}"
+    zalo_message_store.append({
+        "id": user_msg_id,
+        "sender": sender,
+        "text": text,
+        "time": now,
+        "is_ai": False,
+    })
+
+    # Check for /ask prefix
+    is_ask = text.startswith("/ask")
+    if not is_ask:
+        # Regular message — just store it, no AI reply
+        return ChatResponse(success=True, reply="", is_ask=False, user_msg_id=user_msg_id)
+
+    question = text[4:].strip()
+    if not question:
+        hint = "Vui lòng nhập câu hỏi sau /ask ạ.\nVí dụ: /ask Bài tập Toán tuần này là gì?"
+        # Store hint as AI reply
+        ai_msg_id = f"ai-{str(uuid.uuid4())[:8]}"
+        zalo_message_store.append({
+            "id": ai_msg_id,
+            "sender": "Cô Hana (AI)",
+            "text": hint,
+            "time": now,
+            "is_ai": True,
+        })
+        return ChatResponse(success=True, reply=hint, is_ask=True, user_msg_id=user_msg_id, ai_msg_id=ai_msg_id)
+
+    try:
+        # Get AI answer via ChatService
+        from services.chat import get_chat_service
+        chat_service = get_chat_service()
+
+        user_id = f"zalo-{sender}"
+        answer = await chat_service.answer(user_id=user_id, question=question, channel="zalo")
+
+        # Store AI reply
+        ai_msg_id = f"ai-{str(uuid.uuid4())[:8]}"
+        zalo_message_store.append({
+            "id": ai_msg_id,
+            "sender": "Cô Hana (AI)",
+            "text": answer,
+            "time": datetime.now().strftime("%H:%M"),
+            "is_ai": True,
+        })
+
+        logger.info(f"[ZALO-CHAT] /ask from {sender}: {question[:60]} → {len(answer)} chars")
+
+        return ChatResponse(success=True, reply=answer, is_ask=True, user_msg_id=user_msg_id, ai_msg_id=ai_msg_id)
+
+    except Exception as e:
+        logger.error(f"[ZALO-CHAT] Error: {e}")
+        error_text = "Xin lỗi, hệ thống AI đang gặp sự cố. Vui lòng thử lại sau ạ."
+        # Store error as AI reply
+        ai_msg_id = f"ai-{str(uuid.uuid4())[:8]}"
+        zalo_message_store.append({
+            "id": ai_msg_id,
+            "sender": "Cô Hana (AI)",
+            "text": error_text,
+            "time": datetime.now().strftime("%H:%M"),
+            "is_ai": True,
+        })
+        return ChatResponse(
+            success=False,
+            reply=error_text,
+            is_ask=True,
+            error=str(e),
+            user_msg_id=user_msg_id,
+            ai_msg_id=ai_msg_id,
+        )
