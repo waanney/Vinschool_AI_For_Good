@@ -171,7 +171,9 @@ async def chat_ask(request: ChatRequest):
 
         chat_service = get_chat_service()
         user_id = f"zalo-{sender}"
-        answer = await chat_service.answer(user_id=user_id, question=question, channel="zalo")
+        answer = await chat_service.answer(
+            user_id=user_id, question=question, channel="zalo", user_name=sender,
+        )
 
         logger.info(f"[DEMO] /ask from {sender}: {question[:60]} → {len(answer)} chars")
         return ChatResponse(success=True, reply=answer, is_ask=True)
