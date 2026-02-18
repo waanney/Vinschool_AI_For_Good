@@ -65,7 +65,7 @@ class EscalationContext(BaseModel):
     """Context for a teacher escalation notification."""
     question: str
     ai_response: Optional[str] = None
-    confidence_score: float = Field(ge=0.0, le=1.0)
+    confidence_score: Optional[float] = Field(default=None, ge=0.0, le=1.0)
     reason: str
     subject: Optional[str] = None
     topic: Optional[str] = None

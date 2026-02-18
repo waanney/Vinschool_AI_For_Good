@@ -4,10 +4,16 @@ Main NotificationService that orchestrates all notification channels.
 This module provides the high-level API for sending notifications,
 managing channels, and creating notifications from workflow events.
 
-Notification types:
-- Teacher Escalation: AI can't answer -> email + Google Chat to teacher
-- Low Grade Alert: Student scores below threshold -> email to teacher
-- Daily Summary: End-of-day recap -> Google Chat to students, Zalo to parents
+Channels and their purpose:
+- Email       : Teacher escalations (with link back to Google Chat space) + low grade alerts
+- Google Chat : Daily summaries to students (bot posts in the shared space)
+- Zalo        : Daily summaries to parents
+
+Escalation flow:
+  Student @mentions bot in shared space (teacher + student + bot)
+    → Bot replies in space: "can't answer, escalating..."
+    → Bot emails teacher with a link to that space
+    → Teacher opens the link, answers the student directly in the space
 """
 
 import asyncio
@@ -42,10 +48,10 @@ class NotificationService:
     Main notification service orchestrating email, Google Chat, and Zalo channels.
 
     Factory methods:
-    - create_teacher_escalation() -> email + Google Chat to teacher
-    - create_low_grade_alert() -> email to teacher
-    - create_daily_summary_for_students() -> Google Chat to student group
-    - create_daily_summary_for_parents() -> Zalo to parent group
+    - create_teacher_escalation() -> EMAIL to teacher (with link to shared Google Chat space)
+    - create_low_grade_alert()    -> EMAIL to teacher
+    - create_daily_summary_for_students() -> Google Chat (bot posts in shared space)
+    - create_daily_summary_for_parents()  -> Zalo to parent group
     """
 
     _instance: Optional["NotificationService"] = None
@@ -77,6 +83,8 @@ class NotificationService:
             default_webhook_url=settings.GOOGLE_CHAT_WEBHOOK_URL,
             timeout=settings.NOTIFICATION_TIMEOUT,
             enabled=settings.ENABLE_GOOGLE_CHAT_NOTIFICATIONS,
+            credentials_path=settings.GOOGLE_APPLICATION_CREDENTIALS,
+            default_space_id=settings.GOOGLE_CHAT_SPACE_ID,
         )
 
         self._zalo_notifier = ZaloNotifier(
@@ -90,9 +98,10 @@ class NotificationService:
             NotificationChannel.ZALO: self._zalo_notifier,
         }
 
-        # Derive the Google Chat web link from webhook URL
-        self._default_google_chat_link = self._extract_chat_link(
-            settings.GOOGLE_CHAT_WEBHOOK_URL
+        # Derive the Google Chat web link from space ID or webhook URL
+        self._default_google_chat_link = (
+            self._extract_chat_link_from_space(settings.GOOGLE_CHAT_SPACE_ID)
+            or self._extract_chat_link(settings.GOOGLE_CHAT_WEBHOOK_URL)
         )
 
         self._initialized = True
@@ -187,6 +196,19 @@ class NotificationService:
         return results
 
     @staticmethod
+    def _extract_chat_link_from_space(space_id: Optional[str]) -> Optional[str]:
+        """
+        Build a user-accessible Google Chat link from a space resource name.
+
+        ``spaces/SPACE_ID`` → ``https://mail.google.com/chat/u/0/#chat/space/SPACE_ID``
+        """
+        if not space_id:
+            return None
+        # Accept both "spaces/ABC" and bare "ABC"
+        sid = space_id.removeprefix("spaces/")
+        return f"https://mail.google.com/chat/u/0/#chat/space/{sid}"
+
+    @staticmethod
     def _extract_chat_link(webhook_url: Optional[str]) -> Optional[str]:
         """
         Extract a user-accessible Google Chat link from a webhook URL.
@@ -212,8 +234,8 @@ class NotificationService:
         teacher: TeacherInfo,
         student: StudentInfo,
         question: str,
-        confidence_score: float,
         reason: str,
+        confidence_score: Optional[float] = None,
         ai_response: Optional[str] = None,
         subject: Optional[str] = None,
         topic: Optional[str] = None,
@@ -221,10 +243,13 @@ class NotificationService:
         channel: NotificationChannel = NotificationChannel.EMAIL,
     ) -> Notification:
         """
-        Create a teacher escalation notification.
+        Create a teacher escalation notification (EMAIL channel).
 
-        Sent when AI can't confidently answer a student question.
-        Default channel is EMAIL (with optional Google Chat link embedded).
+        Sent when the AI bot can't answer a student's question in Google Chat.
+        Channel is always EMAIL — the bot's in-space reply is handled by the
+        listener, not by this notification.  The email contains the question
+        and a link to the shared Google Chat space so the teacher can open it
+        and answer the student directly.
         """
         # Auto-derive Google Chat link from webhook URL if not explicitly provided
         resolved_chat_link = google_chat_link or self._default_google_chat_link
