@@ -24,7 +24,7 @@ Multi-agent AI system for educational support built with PydanticAI, Milvus, and
 
 ### Notification Service
 - **Multi-Channel Delivery**: Email (SMTP), Google Chat (Webhooks), Zalo (clone UI with REST polling)
-- **Teacher Escalation**: Automatic email + Google Chat card when AI confidence is low, with link to chat with the student
+- **Teacher Escalation**: Automatic email to teacher when AI confidence is low, with link to the Google Chat space where the student asked
 - **Low Grade Alert**: Email to teacher when a student scores below threshold (default: 7.0/10.0)
 - **Daily Summary (Students)**: AI-generated plain text summary sent to class Google Chat group with greeting/closing templates
 - **Daily Summary (Parents)**: Same AI summary with formal greeting/closing sent to Zalo clone UI
@@ -237,7 +237,7 @@ backend/
 │       ├── models.py               # Notification data models
 │       ├── base.py                 # BaseNotifier interface
 │       ├── email_notifier.py       # SMTP email (escalation + low grade)
-│       ├── google_chat_notifier.py # Google Chat webhooks (escalation + daily summary)
+│       ├── google_chat_notifier.py # Google Chat (daily summary only)
 │       ├── zalo_notifier.py        # Zalo clone UI (in-memory store → REST polling)
 │       └── notification_service.py # Main orchestrator + factory methods
 ├── utils/                # Utilities
@@ -324,9 +324,17 @@ ENABLE_AUTO_GRADING=true
 TEACHER_ESCALATION_THRESHOLD=0.6
 ```
 
-### Notification Configuration
+### Notification Service
 
-Enable teacher notifications via email and/or Google Chat:
+The Notification Service sends **one-way** messages to teachers, students, and parents.
+Each notification type targets specific channels — there is no chat or reply.
+
+| Type                     | Channel(s)      | When it fires                                                            |
+| ------------------------ | --------------- | ------------------------------------------------------------------------ |
+| Teacher Escalation       | Email (SMTP)    | AI not confident → email teacher with link to the Google Chat space      |
+| Low Grade Alert          | Email (SMTP)    | Student scores below threshold (default 7/10)                            |
+| Daily Summary (students) | Google Chat     | `DailyContentWorkflow` generates AI summary → text posted to class space |
+| Daily Summary (parents)  | Zalo clone UI   | Same AI summary with formal greeting/closing → stored for REST polling   |
 
 #### Email (SMTP) Setup
 
@@ -349,6 +357,8 @@ SMTP_PASSWORD=your-app-password # abcdefghijklmnop (no spaces)
 SMTP_USE_TLS=true
 NOTIFICATION_SENDER_EMAIL=your-email@gmail.com  # Must match SMTP_USERNAME for Gmail
 NOTIFICATION_SENDER_NAME=Vinschool AI Assistant
+TEACHER_EMAIL=teacher@vinschool.edu.vn          # Recipient for escalation/low-grade emails
+LOW_GRADE_THRESHOLD=7.0                         # Students scoring below this get flagged
 ```
 
 > **Note:** Gmail requires the sender email to match the authenticated account. For a custom sender address like `ai-assistant@vinschool.edu.vn`, use Google Workspace or a transactional email service (SendGrid, Mailgun, Amazon SES).
@@ -356,54 +366,46 @@ NOTIFICATION_SENDER_NAME=Vinschool AI Assistant
 **Other Email Providers:**
 
 | Provider        | SMTP_HOST           | SMTP_PORT |
-|-----------------|---------------------|-----------|
+| --------------- | ------------------- | --------- |
 | Gmail           | smtp.gmail.com      | 587       |
 | Outlook/Hotmail | smtp.office365.com  | 587       |
 | Yahoo           | smtp.mail.yahoo.com | 587       |
 
-**Step 3: Test Email**
+#### Google Chat Setup
 
-```bash
-python scripts/demo_notification.py --escalation
-```
+Google Chat is used **for daily summaries only** — posted as plain text to the class space.
+The notifier supports two modes: Chat API (service account) or Webhook (simpler setup).
 
-#### Google Chat (Webhooks) Setup
+**Webhook mode (simpler — Business/Education accounts only):**
 
-**Step 1: Create a Google Chat Space**
-
-1. Open [Google Chat](https://chat.google.com)
-2. Click **New chat** → **Create a space**
-3. Name your space (e.g., "AI Teacher Notifications")
-
-**Step 2: Create Webhook URL (Business/Education accounts only)**
-
-1. Click on the Space name → **Apps & integrations**
-2. Navigate to **Webhooks** → **Add webhooks**
-3. Name: "Vinschool AI", Avatar URL: (optional)
-4. Click **Save** and copy the webhook URL
-
-**Step 3: Configure `.env`**
+1. Open [Google Chat](https://chat.google.com) → create or open a space
+2. Click on the Space name → **Apps & integrations** → **Webhooks** → **Add webhooks**
+3. Name: "Vinschool AI", click **Save**, copy the webhook URL
 
 ```bash
 ENABLE_GOOGLE_CHAT_NOTIFICATIONS=true
 GOOGLE_CHAT_WEBHOOK_URL=https://chat.googleapis.com/v1/spaces/xxx/messages?key=yyy&token=zzz
 ```
 
-**Step 4: Test Google Chat**
+**Chat API mode (service account — supports replies and richer features):**
+
+Configure a GCP service account with Chat API access and set the space name.
 
 ```bash
-python scripts/demo_notification.py --escalation
+ENABLE_GOOGLE_CHAT_NOTIFICATIONS=true
+GOOGLE_CHAT_SPACE_NAME=spaces/AAAA_BBBB
+GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json
 ```
 
-#### Zalo Clone UI Demo
+#### Zalo Clone UI
 
-Zalo notifications are connected to the Zalo clone UI via REST polling.
-The backend stores plain-text messages in-memory; the frontend polls `GET /api/zalo/messages` every 3 seconds.
+The Zalo channel stores plain-text messages in-memory; the frontend polls `GET /api/zalo/messages` every 3 seconds.
 
 **How it works:**
-- The `DailyContentWorkflow` generates an AI summary → `NotificationService` wraps it with greeting/closing templates → `ZaloNotifier` stores the full text in `zalo_message_store`
-- `api/routes/zalo.py` exposes endpoints: `GET /messages`, `POST /send-demo`, `DELETE /messages`
-- Frontend (`ZaloDesktopChat.tsx` / `ZaloMobileChat.tsx`) polls the backend and renders messages as plain text
+1. `DailyContentWorkflow` generates AI summary
+2. `NotificationService` wraps it with greeting/closing templates
+3. `ZaloNotifier` stores the full text in `zalo_message_store`
+4. Frontend (`ZaloDesktopChat.tsx` / `ZaloMobileChat.tsx`) polls and renders
 
 **Message format:**
 ```
@@ -416,47 +418,56 @@ Kính mong bố mẹ nhắc nhở các con hoàn thành bài tập đầy đủ 
 Cảm ơn bố mẹ các con đã đọc tin ạ!
 ```
 
-**Demo flow (no Docker/DB needed):**
+**Zalo API endpoints:**
 
-```bash
-# Terminal 1 — Start standalone Zalo test server (port 8000)
-cd backend
-python -m scripts.run_zalo_server
-
-# Terminal 2 — Start frontend (port 3000)
-cd frontend
-npm run dev
-```
-
-1. Open the Zalo UI: http://localhost:3000/zalo/desktop (or `/zalo/mobile`)
-2. Send a demo notification:
-   ```bash
-   curl -X POST http://localhost:8000/api/zalo/send-demo
-   ```
-3. The message appears in the Zalo clone UI within 3 seconds.
-4. Clear messages: `curl -X DELETE http://localhost:8000/api/zalo/messages`
-
-**API endpoints:**
-
-| Method | Endpoint                      | Description                                        |
-| ------ | ----------------------------- | -------------------------------------------------- |
-| GET    | `/api/zalo/messages`          | List all stored messages                           |
-| POST   | `/api/zalo/send-demo`         | Send the hardcoded daily summary to the Zalo UI    |
-| POST   | `/api/zalo/chat`              | `/ask` chat with AI (user msg surfaced by frontend, AI reply stored) |
-| DELETE | `/api/zalo/messages`          | Clear all messages                                 |
+| Method   | Endpoint              | Description                                                          |
+| -------- | --------------------- | -------------------------------------------------------------------- |
+| `GET`    | `/api/zalo/messages`  | List all stored messages                                             |
+| `POST`   | `/api/zalo/send-demo` | Send the hardcoded daily summary to the Zalo UI                      |
+| `POST`   | `/api/zalo/chat`      | `/ask` chat with AI (user msg surfaced by frontend, AI reply stored) |
+| `DELETE` | `/api/zalo/messages`  | Clear all messages                                                   |
 
 > **Note:** This uses an in-memory store — messages are lost when the server restarts. For production, replace with Zalo OA API integration.
 
-#### Interactive Chat (`/ask` and @mention)
+#### Notification Demos
 
-The Chat Service provides bidirectional AI Q&A through two channels:
+| Command                                               | What it does                                                     |
+| ----------------------------------------------------- | ---------------------------------------------------------------- |
+| `python scripts/demo_notification.py --dry-run`       | Preview all notification types without sending                   |
+| `python scripts/demo_notification.py --escalation`    | Send teacher escalation email                                    |
+| `python scripts/demo_notification.py --low-grade`     | Send low grade alert email                                       |
+| `python scripts/demo_notification.py --daily-summary` | Send daily summary to Google Chat                                |
+| `python scripts/demo_notification.py --daily-parent`  | Send daily summary to Zalo clone UI (requires `run_zalo_server`) |
+| `python scripts/demo_notification.py --all`           | Run all demos above                                              |
 
-| Channel      | Audience | Trigger           | Persona              | Escalation Behaviour              |
-| ------------ | -------- | ----------------- | -------------------- | --------------------------------- |
-| Zalo clone   | Parents  | `/ask <question>` | Kính ngữ (formal)    | Apologise — no email              |
-| Google Chat  | Students | @mention bot      | Thân thiện (friendly)| Email teacher + notify student    |
+### Chat Service (Cô Hana)
 
-**Zalo `/ask` — test from terminal:**
+The Chat Service provides **bidirectional** AI Q&A. Students and parents can ask questions and receive instant answers grounded in `data/lesson.txt`.
+
+| Channel     | Audience | Trigger           | Persona               | Escalation Behaviour           |
+| ----------- | -------- | ----------------- | --------------------- | ------------------------------ |
+| Zalo clone  | Parents  | `/ask <question>` | Kính ngữ (formal)     | Apologise — no email           |
+| Google Chat | Students | @mention bot      | Thân thiện (friendly) | Email teacher + notify student |
+
+**Key features:**
+- **Message debouncing**: Rapid messages from the same user are batched (3 s quiet window) into a single AI request
+- **Conversation history**: Per-user history (last 10 messages) for contextual follow-ups
+- **Smart escalation**: When confidence is low, Google Chat triggers an email to the teacher with a link to the space; Zalo sends a polite apology only
+
+#### Zalo `/ask` — Quick Test
+
+```bash
+# Terminal 1 — Start standalone Zalo server
+cd backend && python -m scripts.run_zalo_server
+
+# Terminal 2 — Start frontend
+cd frontend && npm run dev
+```
+
+1. Open http://localhost:3000/zalo-desktop (or `/zalo-mobile`)
+2. Type `/ask Bài tập Toán tuần này là gì?` in the chat
+
+Or test from terminal:
 
 ```bash
 curl -X POST http://localhost:8000/api/zalo/chat \
@@ -464,66 +475,31 @@ curl -X POST http://localhost:8000/api/zalo/chat \
   -d '{"sender": "Phụ huynh Alex", "text": "/ask Bài tập Toán tuần này là gì?"}'
 ```
 
-**Google Chat @mention:** Send `@Vinschool Bot Bài tập Toán tuần này là gì?` in the Google Chat space.
+#### Google Chat @mention
+
+Students @mention the bot in the Google Chat space. Run the listener:
 
 ```bash
-cd backend
-python -m scripts.run_google_chat
+cd backend && python -m scripts.run_google_chat
 ```
 
-**Direct ChatService test (no server needed):**
+#### Chat Demos
 
-```bash
-cd backend
-python -m scripts.demo_chat         # Direct LLM call
-python -m scripts.demo_chat --http  # Via HTTP (needs running server)
-```
+| Command                              | What it does                       |
+| ------------------------------------ | ---------------------------------- |
+| `python -m scripts.demo_chat`        | Direct LLM call (no server needed) |
+| `python -m scripts.demo_chat --http` | Via HTTP (needs running server)    |
 
-**Teacher Escalation Email:**
-
-When the AI is not confident on Google Chat, an email is sent to `TEACHER_EMAIL`:
+#### Escalation `.env`
 
 ```bash
 TEACHER_EMAIL=teacher@vinschool.edu.vn  # Recipient for escalation emails
 ```
 
-#### Low Grade Threshold
-
-Configure the minimum score (out of 10) that triggers a low grade alert to the teacher:
-
-```bash
-LOW_GRADE_THRESHOLD=7.0  # Students scoring below this get flagged
-```
-
-#### Testing Notifications
-
-```bash
-# Preview all notification types without sending
-python scripts/demo_notification.py --dry-run
-
-# Demo teacher escalation (Email + Google Chat)
-python scripts/demo_notification.py --escalation
-
-# Demo low grade alert (Email to teacher)
-python scripts/demo_notification.py --low-grade
-
-# Demo daily summary for students (Google Chat)
-python scripts/demo_notification.py --daily-summary
-
-# Demo daily summary for parents (Zalo clone UI)
-# Requires run_zalo_server.py running on port 8000 — the demo POSTs to it
-python scripts/demo_notification.py --daily-parent
-
-# Run all feature demos
-python scripts/demo_notification.py --all
-```
-
-**Note:** Teachers can also have individual webhook URLs stored in their profile for notifications to their specific chat rooms.
-
 ## Testing
 
 ```bash
-# Run all tests (91 tests)
+# Run all tests (89 tests)
 pytest tests/ -v
 
 # Run with coverage
@@ -532,8 +508,8 @@ pytest --cov=. --cov-report=html
 # Run specific test suites
 pytest tests/test_chat_service.py -v           # ChatService (24 tests)
 pytest tests/test_debouncer.py -v              # MessageDebouncer (9 tests)
-pytest tests/test_google_chat_listener.py -v   # GoogleChatListener (9 tests)
-pytest tests/test_notification_service.py -v   # NotificationService (49 tests)
+pytest tests/test_google_chat_listener.py -v   # GoogleChatListener (10 tests)
+pytest tests/test_notification_service.py -v   # NotificationService (46 tests)
 ```
 
 ## Contributing
