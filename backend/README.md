@@ -402,7 +402,7 @@ The backend stores plain-text messages in-memory; the frontend polls `GET /api/z
 
 **How it works:**
 - The `DailyContentWorkflow` generates an AI summary → `NotificationService` wraps it with greeting/closing templates → `ZaloNotifier` stores the full text in `zalo_message_store`
-- `api/routes/zalo.py` exposes endpoints: `GET /messages`, `POST /send-demo`, `POST /send-daily-summary`, `DELETE /messages`
+- `api/routes/zalo.py` exposes endpoints: `GET /messages`, `POST /send-demo`, `DELETE /messages`
 - Frontend (`ZaloDesktopChat.tsx` / `ZaloMobileChat.tsx`) polls the backend and renders messages as plain text
 
 **Message format:**
@@ -433,23 +433,16 @@ npm run dev
    ```bash
    curl -X POST http://localhost:8000/api/zalo/send-demo
    ```
-3. Or send custom AI content:
-   ```bash
-   curl -X POST http://localhost:8000/api/zalo/send-daily-summary \
-     -H "Content-Type: application/json" \
-     -d '{"content": "Hom nay cac con hoc mon Toan va Tieng Anh."}'
-   ```
-4. The message appears in the Zalo clone UI within 3 seconds.
-5. Clear messages: `curl -X DELETE http://localhost:8000/api/zalo/messages`
+3. The message appears in the Zalo clone UI within 3 seconds.
+4. Clear messages: `curl -X DELETE http://localhost:8000/api/zalo/messages`
 
 **API endpoints:**
 
 | Method | Endpoint                      | Description                                        |
 | ------ | ----------------------------- | -------------------------------------------------- |
 | GET    | `/api/zalo/messages`          | List all stored messages                           |
-| POST   | `/api/zalo/send-demo`         | Send a hardcoded daily summary sample              |
-| POST   | `/api/zalo/send-daily-summary`| Send AI content wrapped with greeting/closing      |
-| POST   | `/api/zalo/chat`              | `/ask` chat with AI (stores user msg + AI reply)   |
+| POST   | `/api/zalo/send-demo`         | Send the hardcoded daily summary to the Zalo UI    |
+| POST   | `/api/zalo/chat`              | `/ask` chat with AI (user msg surfaced by frontend, AI reply stored) |
 | DELETE | `/api/zalo/messages`          | Clear all messages                                 |
 
 > **Note:** This uses an in-memory store — messages are lost when the server restarts. For production, replace with Zalo OA API integration.

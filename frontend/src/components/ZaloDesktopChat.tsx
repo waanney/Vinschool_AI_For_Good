@@ -47,7 +47,11 @@ export const ZaloDesktopChat: React.FC = () => {
     const scrollRef = useRef<HTMLDivElement>(null);
     const [messages, setMessages] = useState<Message[]>([]);
     const [loading, setLoading] = useState(true);
+    // fetchedIds tracks ALL IDs we have locally (backend + local-only user messages).
     const fetchedIds = useRef<Set<string>>(new Set());
+    // backendFetchedIds tracks only IDs that actually came from the backend.
+    // Used for the reset-on-DELETE check so local user messages don't trigger a false reset.
+    const backendFetchedIds = useRef<Set<string>>(new Set());
 
     /** Fetch messages from backend and sync (add new + remove deleted) */
     const fetchMessages = useCallback(async () => {
@@ -58,9 +62,13 @@ export const ZaloDesktopChat: React.FC = () => {
             const backendMessages = data.messages as BackendMessage[];
             const backendIds = new Set(backendMessages.map(m => m.id));
 
-            // If backend has fewer messages (e.g. after DELETE), reset state
-            if (backendMessages.length < fetchedIds.current.size) {
+            // If the backend has fewer messages than we know about from the backend
+            // (e.g. after a DELETE /messages call), reset state entirely.
+            // We intentionally compare against backendFetchedIds (not fetchedIds) so
+            // that locally-added user messages don't falsely trigger this branch.
+            if (backendMessages.length < backendFetchedIds.current.size) {
                 fetchedIds.current = new Set(backendIds);
+                backendFetchedIds.current = new Set(backendIds);
                 setMessages(
                     backendMessages.map(msg => ({
                         id: msg.id,
@@ -76,6 +84,7 @@ export const ZaloDesktopChat: React.FC = () => {
             // Otherwise, append only new messages
             const newMessages: Message[] = [];
             for (const msg of backendMessages) {
+                backendFetchedIds.current.add(msg.id);
                 if (!fetchedIds.current.has(msg.id)) {
                     fetchedIds.current.add(msg.id);
                     newMessages.push({
@@ -121,6 +130,19 @@ export const ZaloDesktopChat: React.FC = () => {
         // If message starts with /ask, send to backend first and wait for response
         if (text.startsWith("/ask")) {
             setInputText("");
+
+            // Show the user's message immediately — don't wait for the round-trip
+            const tempId = `user-temp-${Date.now()}`;
+            const userMsg: Message = {
+                id: tempId,
+                sender: "Phụ huynh Alex",
+                content: <p className="text-[14px] text-gray-800">{text}</p>,
+                time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                isAI: false
+            };
+            setMessages(prev => [...prev, userMsg]);
+            fetchedIds.current.add(tempId);
+
             setIsTyping(true);
             try {
                 const res = await fetch(`${API_BASE}/api/zalo/chat`, {
@@ -131,17 +153,13 @@ export const ZaloDesktopChat: React.FC = () => {
                 if (res.ok) {
                     const data = await res.json();
 
-                    // Add user message with backend ID
+                    // Replace temp ID with the real backend ID so the poller won't re-add it
                     if (data.user_msg_id) {
-                        const userMsg: Message = {
-                            id: data.user_msg_id,
-                            sender: "Phụ huynh Alex",
-                            content: <p className="text-[14px] text-gray-800">{text}</p>,
-                            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                            isAI: false
-                        };
-                        setMessages(prev => [...prev, userMsg]);
+                        fetchedIds.current.delete(tempId);
                         fetchedIds.current.add(data.user_msg_id);
+                        setMessages(prev => prev.map(m =>
+                            m.id === tempId ? { ...m, id: data.user_msg_id } : m
+                        ));
                     }
 
                     // Add AI reply with backend ID

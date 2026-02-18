@@ -48,6 +48,8 @@ export const ZaloMobileChat: React.FC = () => {
     const [messages, setMessages] = useState<Message[]>([]);
     const [loading, setLoading] = useState(true);
     const fetchedIds = useRef<Set<string>>(new Set());
+    // Tracks only backend-originated IDs for the reset-on-DELETE check.
+    const backendFetchedIds = useRef<Set<string>>(new Set());
 
     /** Fetch messages from backend and sync (add new + remove deleted) */
     const fetchMessages = useCallback(async () => {
@@ -58,9 +60,12 @@ export const ZaloMobileChat: React.FC = () => {
             const backendMessages = data.messages as BackendMessage[];
             const backendIds = new Set(backendMessages.map(m => m.id));
 
-            // If backend has fewer messages (e.g. after DELETE), reset state
-            if (backendMessages.length < fetchedIds.current.size) {
+            // If backend has fewer messages than we've seen from it (e.g. DELETE),
+            // reset state. Compare against backendFetchedIds not fetchedIds so
+            // local user messages don't falsely trigger this.
+            if (backendMessages.length < backendFetchedIds.current.size) {
                 fetchedIds.current = new Set(backendIds);
+                backendFetchedIds.current = new Set(backendIds);
                 setMessages(
                     backendMessages.map(msg => ({
                         id: msg.id,
@@ -76,6 +81,7 @@ export const ZaloMobileChat: React.FC = () => {
             // Otherwise, append only new messages
             const newMessages: Message[] = [];
             for (const msg of backendMessages) {
+                backendFetchedIds.current.add(msg.id);
                 if (!fetchedIds.current.has(msg.id)) {
                     fetchedIds.current.add(msg.id);
                     newMessages.push({
@@ -122,6 +128,19 @@ export const ZaloMobileChat: React.FC = () => {
         // If message starts with /ask, send to backend first and wait for response
         if (text.startsWith("/ask")) {
             setInputText("");
+
+            // Show the user's message immediately — don't wait for the round-trip
+            const tempId = `user-temp-${Date.now()}`;
+            const userMsg: Message = {
+                id: tempId,
+                sender: "Phụ huynh",
+                content: <p className="text-[13.5px]">{text}</p>,
+                time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                isAI: false
+            };
+            setMessages(prev => [...prev, userMsg]);
+            fetchedIds.current.add(tempId);
+
             setIsTyping(true);
             try {
                 const res = await fetch(`${API_BASE}/api/zalo/chat`, {
@@ -132,17 +151,13 @@ export const ZaloMobileChat: React.FC = () => {
                 if (res.ok) {
                     const data = await res.json();
 
-                    // Add user message with backend ID
+                    // Replace temp ID with the real backend ID so the poller won't re-add it
                     if (data.user_msg_id) {
-                        const userMsg: Message = {
-                            id: data.user_msg_id,
-                            sender: "Phụ huynh",
-                            content: <p className="text-[13.5px]">{text}</p>,
-                            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                            isAI: false
-                        };
-                        setMessages(prev => [...prev, userMsg]);
+                        fetchedIds.current.delete(tempId);
                         fetchedIds.current.add(data.user_msg_id);
+                        setMessages(prev => prev.map(m =>
+                            m.id === tempId ? { ...m, id: data.user_msg_id } : m
+                        ));
                     }
 
                     // Add AI reply with backend ID
