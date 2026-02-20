@@ -311,7 +311,7 @@ class GoogleChatListener:
         # Send typing indicator
         await self._reply_to_chat(
             space_name,
-            "🤔 Cô Hana đang tra cứu thông tin...",
+            "Cô Hana đang tra cứu thông tin...",
             thread_name,
         )
 
@@ -320,6 +320,7 @@ class GoogleChatListener:
             user_id=user_id,
             question=combined_text,
             channel="gchat",
+            user_name=user_name,
         )
 
         # Send answer

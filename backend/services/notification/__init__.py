@@ -2,21 +2,20 @@
 Notification service package.
 
 Supported channels:
-- Email (SMTP) - for teacher escalations and low grade alerts
-- Google Chat (Webhooks) - for teacher escalations and daily summaries to students
-- Zalo - for daily summaries to parents (stores messages for clone UI)
+- Email (SMTP) - teacher escalations (with link to Google Chat space) + low grade alerts
+- Google Chat (Chat API / Webhook fallback) - daily summaries to students in the shared space
+- Zalo - daily summaries to parents (stores messages for clone UI)
 
 Usage:
     from services.notification import get_notification_service, TeacherInfo, StudentInfo
 
     service = get_notification_service()
 
-    # Teacher escalation
+    # Teacher escalation (confidence_score is optional)
     notification = service.create_teacher_escalation(
         teacher=TeacherInfo(teacher_id="t1", name="Teacher", email="teacher@school.edu"),
         student=StudentInfo(student_id="s1", name="Student"),
         question="What is quantum physics?",
-        confidence_score=0.3,
         reason="Topic not in knowledge base",
     )
     results = await service.send(notification)

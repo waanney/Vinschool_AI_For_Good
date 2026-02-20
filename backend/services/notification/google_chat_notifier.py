@@ -1,10 +1,18 @@
 """
 Google Chat notification implementation.
 
-This module provides Google Chat notification functionality using webhooks.
+This module provides Google Chat notification functionality via two modes:
+
+1. **Chat API** (preferred): Uses a service-account to post messages through
+   the Google Chat REST API. Requires ``GOOGLE_APPLICATION_CREDENTIALS``
+   and ``GOOGLE_CHAT_SPACE_ID`` in ``.env``.  This is the same bot used
+   by the Pub/Sub listener, so there's only **one** bot identity.
+
+2. **Webhook** (legacy fallback): Uses an incoming webhook URL. Simpler
+   but creates a second bot identity and doesn't support all features.
+
 Used for:
-- Teacher escalations (send to teacher's webhook)
-- Daily summaries (send to student class group webhook)
+- Daily summaries to students (plain-text message to the class Google Chat group)
 """
 
 import json
@@ -26,9 +34,10 @@ from .models import (
 
 class GoogleChatNotifier(BaseNotifier):
     """
-    Google Chat notification channel using webhooks.
+    Google Chat notification channel.
 
-    Sends formatted card messages to Google Chat spaces/rooms.
+    Prefers the Chat API (service-account) when credentials and a space ID
+    are provided, otherwise falls back to webhooks.
     """
 
     def __init__(
@@ -36,19 +45,74 @@ class GoogleChatNotifier(BaseNotifier):
         default_webhook_url: Optional[str] = None,
         timeout: int = 30,
         enabled: bool = True,
+        # Chat API mode (preferred)
+        credentials_path: Optional[str] = None,
+        default_space_id: Optional[str] = None,
     ):
         super().__init__(enabled=enabled)
         self.default_webhook_url = default_webhook_url
         self.timeout = timeout
 
+        # Chat API fields
+        self._credentials_path = credentials_path
+        self._default_space_id = default_space_id
+        self._credentials = None
+
+        # Decide mode
+        self._use_chat_api = bool(credentials_path and default_space_id)
+        if self._use_chat_api:
+            logger.info("[GCHAT-NOTIFIER] Using Chat API mode (service account)")
+        elif default_webhook_url:
+            logger.info("[GCHAT-NOTIFIER] Using webhook mode (legacy)")
+        else:
+            logger.info("[GCHAT-NOTIFIER] No Chat API or webhook configured")
+
     @property
     def channel_name(self) -> str:
         return "google_chat"
 
+    # ---- Credential helpers (Chat API mode) ----
+
+    def _load_credentials(self):
+        """Load service-account credentials for the Chat API."""
+        try:
+            from google.oauth2 import service_account
+
+            scopes = ["https://www.googleapis.com/auth/chat.bot"]
+            self._credentials = service_account.Credentials.from_service_account_file(
+                self._credentials_path, scopes=scopes
+            )
+            return self._credentials
+        except ImportError:
+            logger.error("[GCHAT-NOTIFIER] google-auth not installed")
+            return None
+        except Exception as e:
+            logger.error(f"[GCHAT-NOTIFIER] Failed to load credentials: {e}")
+            return None
+
+    def _get_access_token(self) -> Optional[str]:
+        """Get a valid access token, refreshing if necessary."""
+        if not self._credentials:
+            if not self._load_credentials():
+                return None
+        from google.auth.transport.requests import Request
+
+        if self._credentials.expired or not self._credentials.token:
+            self._credentials.refresh(Request())
+        return self._credentials.token
+
+    # ---- Config validation ----
+
     async def validate_config(self) -> tuple[bool, Optional[str]]:
         """Validate Google Chat configuration."""
+        if self._use_chat_api:
+            import os
+            if not os.path.exists(self._credentials_path):
+                return False, f"Credentials file not found: {self._credentials_path}"
+            return True, None
+
         if not self.default_webhook_url:
-            logger.warning("No default Google Chat webhook configured. "
+            logger.warning("No Chat API or webhook configured. "
                           "Will rely on per-teacher webhook URLs.")
             return True, None
 
@@ -58,7 +122,98 @@ class GoogleChatNotifier(BaseNotifier):
         return True, None
 
     async def send(self, notification: Notification) -> NotificationResult:
-        """Send Google Chat notification."""
+        """Send Google Chat notification via Chat API or webhook."""
+        if self._use_chat_api:
+            return await self._send_via_chat_api(notification)
+        return await self._send_via_webhook(notification)
+
+    # ---- Chat API mode ----
+
+    def _resolve_space(self, notification: Notification) -> Optional[str]:
+        """Resolve the Google Chat space name for this notification.
+
+        Priority: teacher.google_chat_webhook (if it looks like a space name),
+        then the default_space_id.
+        """
+        # If the teacher field stores a space name (e.g. "spaces/xxx")
+        if notification.teacher and notification.teacher.google_chat_webhook:
+            val = notification.teacher.google_chat_webhook
+            if val.startswith("spaces/"):
+                return val
+        return self._default_space_id
+
+    async def _send_via_chat_api(self, notification: Notification) -> NotificationResult:
+        """Send using the Google Chat REST API (service account)."""
+        space = self._resolve_space(notification)
+        if not space:
+            return NotificationResult(
+                notification_id=notification.notification_id,
+                success=False,
+                channel=NotificationChannel.GOOGLE_CHAT,
+                error_message="No Google Chat space ID available",
+            )
+
+        token = self._get_access_token()
+        if not token:
+            return NotificationResult(
+                notification_id=notification.notification_id,
+                success=False,
+                channel=NotificationChannel.GOOGLE_CHAT,
+                error_message="Failed to get Chat API access token",
+            )
+
+        try:
+            body = self._create_daily_summary_message(notification)
+
+            url = f"https://chat.googleapis.com/v1/{space}/messages"
+
+            async with httpx.AsyncClient() as client:
+                resp = await client.post(
+                    url,
+                    headers={"Authorization": f"Bearer {token}"},
+                    json=body,
+                    timeout=self.timeout,
+                )
+                resp.raise_for_status()
+
+            data = resp.json()
+            thread_id = data.get("thread", {}).get("name")
+            logger.info(f"Google Chat message sent via Chat API to {space}")
+
+            return NotificationResult(
+                notification_id=notification.notification_id,
+                success=True,
+                channel=NotificationChannel.GOOGLE_CHAT,
+                sent_at=datetime.now(),
+                google_chat_thread_id=thread_id,
+            )
+
+        except httpx.TimeoutException:
+            return NotificationResult(
+                notification_id=notification.notification_id,
+                success=False,
+                channel=NotificationChannel.GOOGLE_CHAT,
+                error_message="Timeout sending via Chat API",
+            )
+        except httpx.HTTPStatusError as e:
+            return NotificationResult(
+                notification_id=notification.notification_id,
+                success=False,
+                channel=NotificationChannel.GOOGLE_CHAT,
+                error_message=f"Chat API HTTP error: {e.response.status_code}",
+            )
+        except Exception as e:
+            return NotificationResult(
+                notification_id=notification.notification_id,
+                success=False,
+                channel=NotificationChannel.GOOGLE_CHAT,
+                error_message=f"Chat API error: {e}",
+            )
+
+    # ---- Webhook mode (legacy) ----
+
+    async def _send_via_webhook(self, notification: Notification) -> NotificationResult:
+        """Send using an incoming webhook URL (legacy fallback)."""
         webhook_url = self._get_webhook_url(notification)
 
         if not webhook_url:
@@ -73,10 +228,7 @@ class GoogleChatNotifier(BaseNotifier):
 
         try:
             # Choose message format based on notification type
-            if notification.notification_type == NotificationType.DAILY_SUMMARY:
-                message = self._create_daily_summary_message(notification)
-            else:
-                message = self._create_card_message(notification)
+            message = self._create_daily_summary_message(notification)
 
             async with httpx.AsyncClient() as client:
                 response = await client.post(
@@ -129,29 +281,9 @@ class GoogleChatNotifier(BaseNotifier):
 
     def _get_webhook_url(self, notification: Notification) -> Optional[str]:
         """Get the appropriate webhook URL for this notification."""
-        # For teacher escalations, use teacher-specific webhook or default
         if notification.teacher and notification.teacher.google_chat_webhook:
             return notification.teacher.google_chat_webhook
         return self.default_webhook_url
-
-    def _create_card_message(self, notification: Notification) -> dict:
-        """Create a Google Chat card message for escalation/alert notifications."""
-        sections = self._build_sections(notification)
-
-        return {
-            "cardsV2": [
-                {
-                    "cardId": notification.notification_id,
-                    "card": {
-                        "header": {
-                            "title": f"{self._get_notification_emoji(notification.notification_type)} {notification.title}",
-                            "subtitle": notification.notification_type.value.replace("_", " ").title(),
-                        },
-                        "sections": sections,
-                    }
-                }
-            ]
-        }
 
     def _create_daily_summary_message(self, notification: Notification) -> dict:
         """
@@ -162,160 +294,3 @@ class GoogleChatNotifier(BaseNotifier):
         NotificationService factory methods.
         """
         return {"text": notification.message}
-
-    def _build_sections(self, notification: Notification) -> list[dict]:
-        """Build card sections based on notification type."""
-        sections = []
-
-        # Main message
-        sections.append({
-            "header": "Details",
-            "widgets": [{"textParagraph": {"text": notification.message}}]
-        })
-
-        if notification.notification_type == NotificationType.TEACHER_ESCALATION:
-            sections.extend(self._build_escalation_sections(notification))
-        elif notification.notification_type == NotificationType.LOW_GRADE_ALERT:
-            sections.extend(self._build_low_grade_sections(notification))
-
-        # Student info
-        if notification.student:
-            sections.append({
-                "header": "Student Information",
-                "widgets": [
-                    {
-                        "decoratedText": {
-                            "topLabel": "Student Name",
-                            "text": notification.student.name,
-                            "startIcon": {"knownIcon": "PERSON"}
-                        }
-                    },
-                    {
-                        "decoratedText": {
-                            "topLabel": "Grade / Class",
-                            "text": f"{notification.student.grade or 'N/A'} / {notification.student.class_name or 'N/A'}",
-                            "startIcon": {"knownIcon": "BOOKMARK"}
-                        }
-                    }
-                ]
-            })
-
-        # Timestamp
-        sections.append({
-            "widgets": [{
-                "textParagraph": {
-                    "text": f"<i>Sent at {notification.created_at.strftime('%Y-%m-%d %H:%M:%S')}</i>"
-                }
-            }]
-        })
-
-        return sections
-
-    def _build_escalation_sections(self, notification: Notification) -> list[dict]:
-        """Build sections for escalation notifications."""
-        if not notification.escalation_context:
-            return []
-
-        ctx = notification.escalation_context
-
-        widgets = [
-            {"textParagraph": {"text": f"<b>Question:</b> \"{ctx.question}\""}},
-            {
-                "decoratedText": {
-                    "topLabel": "AI Confidence",
-                    "text": f"{ctx.confidence_score:.1%}",
-                    "startIcon": {"knownIcon": "CONFIRMATION_NUMBER_ICON"}
-                }
-            },
-            {
-                "decoratedText": {
-                    "topLabel": "Subject",
-                    "text": ctx.subject or "Not specified",
-                    "startIcon": {"knownIcon": "DESCRIPTION"}
-                }
-            },
-            {"textParagraph": {"text": f"<b>Reason:</b> {ctx.reason}"}},
-        ]
-
-        sections = [{"header": "Question Details", "widgets": widgets}]
-
-        if ctx.ai_response:
-            sections.append({
-                "header": "AI Response Given",
-                "collapsible": True,
-                "widgets": [{"textParagraph": {"text": ctx.ai_response}}]
-            })
-
-        if ctx.google_chat_link:
-            sections.append({
-                "header": "Respond to Student",
-                "widgets": [{
-                    "buttonList": {
-                        "buttons": [{
-                            "text": "Open Chat with Student",
-                            "onClick": {"openLink": {"url": ctx.google_chat_link}}
-                        }]
-                    }
-                }]
-            })
-
-        return sections
-
-    def _build_low_grade_sections(self, notification: Notification) -> list[dict]:
-        """Build sections for low grade notifications."""
-        if not notification.low_grade_context:
-            return []
-
-        ctx = notification.low_grade_context
-
-        widgets = [
-            {
-                "decoratedText": {
-                    "topLabel": "Assignment",
-                    "text": ctx.assignment_title,
-                    "startIcon": {"knownIcon": "DESCRIPTION"}
-                }
-            },
-            {
-                "decoratedText": {
-                    "topLabel": "Subject",
-                    "text": ctx.subject,
-                    "startIcon": {"knownIcon": "BOOKMARK"}
-                }
-            },
-            {
-                "decoratedText": {
-                    "topLabel": "Score",
-                    "text": f"{ctx.score:.1f}/{ctx.max_score:.1f} (threshold: {ctx.threshold:.1f})",
-                    "startIcon": {"knownIcon": "STAR"}
-                }
-            },
-        ]
-
-        sections = [{"header": "Assignment Details", "widgets": widgets}]
-
-        if ctx.feedback:
-            sections.append({
-                "header": "AI Feedback",
-                "collapsible": True,
-                "widgets": [{"textParagraph": {"text": ctx.feedback}}]
-            })
-
-        if ctx.areas_for_improvement:
-            text = "\n".join([f"- {area}" for area in ctx.areas_for_improvement])
-            sections.append({
-                "header": "Areas for Improvement",
-                "collapsible": True,
-                "widgets": [{"textParagraph": {"text": text}}]
-            })
-
-        return sections
-
-    def _get_notification_emoji(self, notification_type: NotificationType) -> str:
-        """Get an emoji for the notification type."""
-        emojis = {
-            NotificationType.TEACHER_ESCALATION: "❓",
-            NotificationType.LOW_GRADE_ALERT: "⚠️",
-            NotificationType.DAILY_SUMMARY: "📋",
-        }
-        return emojis.get(notification_type, "🔔")

@@ -70,11 +70,11 @@ def sample_parent():
 @pytest.fixture
 def sample_escalation_context():
     return EscalationContext(
-        question="Thu 6 tuan nay co kiem tra Tieng Viet khong co?",
-        ai_response="Cau hoi nay co chua co du thong tin de tra loi.",
+        question="Thứ 6 tuần này có kiểm tra Tiếng Việt không ạ?",
+        ai_response="Câu hỏi này cô chưa có đủ thông tin để trả lời.",
         confidence_score=0.3,
         reason="Topic not in knowledge base",
-        subject="Tieng Viet",
+        subject="Tiếng Việt",
         google_chat_link="https://mail.google.com/chat/u/0/#chat/space/1234567",
     )
 
@@ -100,24 +100,24 @@ def sample_daily_summary_context():
         lessons=[
             LessonSummary(
                 subject="Science",
-                content='Cac con lam thi nghiem de tim hieu ve co che hoat dong cua he tieu hoa "digestive system".',
-                homework="Hom qua co Oanh da phat mot phieu bai tap mon Science, cac con hoan thanh va nop lai cho co vao thu hai (12/01) nhe.",
+                content='Các con làm thí nghiệm để tìm hiểu về cơ chế hoạt động của hệ tiêu hóa "digestive system".',
+                homework="Hôm qua cô Oanh đã phát một phiếu bài tập môn Science, các con hoàn thành và nộp lại cho cô vào thứ hai (12/01) nhé.",
                 homework_link="https://drive.google.com/drive/folders/example1",
             ),
             LessonSummary(
-                subject="Toan",
-                content='Cac con on tap ve phep tinh cong va tru phan so co cung mau so "denominator".',
-                mandatory_assignment="Bai tap Toan trong workbook tuan nay cua cac con la: Unit 9.1, pages 93-97",
-                mandatory_assignment_deadline="han nop thu Ba 13/01",
+                subject="Toán",
+                content='Các con ôn tập về phép tính cộng và trừ phân số có cùng mẫu số "denominator".',
+                mandatory_assignment="Bài tập Toán trong workbook tuần này của các con là: Unit 9.1, pages 93-97",
+                mandatory_assignment_deadline="hạn nộp thứ Ba 13/01",
                 homework_link="https://drive.google.com/drive/folders/example2",
             ),
             LessonSummary(
-                subject="Tieng Anh",
-                content='Cac con on tap lai cau dieu kien loai 0 "zero conditional" va cau hoi duoi "question tag".',
+                subject="Tiếng Anh",
+                content='Các con ôn tập lại câu điều kiện loại 0 "zero conditional" và câu hỏi đuôi "question tag".',
                 homework_link="https://classroom.google.com/c/example3",
             ),
         ],
-        general_notes="Cac con nho hoan thanh bai tap day du nhe!",
+        general_notes="Các con nhớ hoàn thành bài tập đầy đủ nhé!",
     )
 
 
@@ -154,7 +154,7 @@ def sample_daily_summary_notification(sample_student, sample_daily_summary_conte
         channel=NotificationChannel.GOOGLE_CHAT,
         student=sample_student,
         title="Daily Summary - 2026-01-12",
-        message="Cac con than men,\nCo Hana gui lai noi dung buoi hoc ngay hom nay cua cac con,",
+        message="Các con thân mến,\nCô Hana gửi lại nội dung buổi học ngày hôm nay của các con,",
         daily_summary_context=sample_daily_summary_context,
     )
 
@@ -184,6 +184,10 @@ class TestNotificationModels:
     def test_escalation_context_confidence_bounds(self):
         ctx = EscalationContext(question="Test", confidence_score=0.5, reason="Test")
         assert 0.0 <= ctx.confidence_score <= 1.0
+
+    def test_escalation_context_confidence_none(self):
+        ctx = EscalationContext(question="Test", reason="Test")
+        assert ctx.confidence_score is None
 
     def test_escalation_context_with_chat_link(self):
         ctx = EscalationContext(
@@ -372,23 +376,6 @@ class TestGoogleChatNotifier:
         valid, error = await notifier.validate_config()
         assert valid is False
 
-    def test_create_card_message_escalation(self, sample_escalation_notification):
-        notifier = GoogleChatNotifier()
-        card = notifier._create_card_message(sample_escalation_notification)
-        assert "cardsV2" in card
-        assert len(card["cardsV2"]) == 1
-
-    def test_create_card_message_has_chat_link_button(self, sample_escalation_notification):
-        notifier = GoogleChatNotifier()
-        sections = notifier._build_escalation_sections(sample_escalation_notification)
-        # Should have a section with "Open Chat with Student" button
-        button_found = False
-        for section in sections:
-            for widget in section.get("widgets", []):
-                if "buttonList" in widget:
-                    button_found = True
-        assert button_found
-
     def test_create_daily_summary_message(self, sample_daily_summary_notification):
         """Daily summary message passes through notification.message as plain text."""
         notifier = GoogleChatNotifier()
@@ -396,11 +383,6 @@ class TestGoogleChatNotifier:
         assert "text" in msg
         # The message text should match the notification's message field directly
         assert msg["text"] == sample_daily_summary_notification.message
-
-    def test_create_low_grade_card(self, sample_low_grade_notification):
-        notifier = GoogleChatNotifier()
-        card = notifier._create_card_message(sample_low_grade_notification)
-        assert "cardsV2" in card
 
     @pytest.mark.asyncio
     async def test_send_no_webhook(self, sample_escalation_notification):
@@ -502,6 +484,8 @@ class TestNotificationService:
             settings.ZALO_OA_ACCESS_TOKEN = None
             settings.ENABLE_ZALO_NOTIFICATIONS = False
             settings.NOTIFICATION_TIMEOUT = 30
+            settings.GOOGLE_APPLICATION_CREDENTIALS = None
+            settings.GOOGLE_CHAT_SPACE_ID = None
             mock.return_value = settings
             yield settings
 
@@ -512,12 +496,12 @@ class TestNotificationService:
             teacher=sample_teacher,
             student=sample_student,
             question="What is X?",
-            confidence_score=0.25,
             reason="Low confidence",
         )
         assert notification.notification_type == NotificationType.TEACHER_ESCALATION
         assert notification.escalation_context is not None
         assert notification.escalation_context.question == "What is X?"
+        assert notification.escalation_context.confidence_score is None
 
     def test_create_teacher_escalation_with_chat_link(self, mock_settings, sample_teacher, sample_student):
         NotificationService._instance = None
@@ -526,11 +510,12 @@ class TestNotificationService:
             teacher=sample_teacher,
             student=sample_student,
             question="Test?",
-            confidence_score=0.3,
             reason="Test",
+            confidence_score=0.3,
             google_chat_link="https://chat.google.com/space/123",
         )
         assert notification.escalation_context.google_chat_link == "https://chat.google.com/space/123"
+        assert notification.escalation_context.confidence_score == 0.3
 
     def test_create_low_grade_alert(self, mock_settings, sample_teacher, sample_student):
         NotificationService._instance = None
@@ -556,7 +541,7 @@ class TestNotificationService:
     def test_create_daily_summary_for_students(self, mock_settings, sample_student):
         NotificationService._instance = None
         service = NotificationService()
-        ai_summary = "Hom nay cac con hoc mon Toan va Tieng Anh."
+        ai_summary = "Hôm nay các con học môn Toán và Tiếng Anh."
         notification = service.create_daily_summary_for_students(
             student=sample_student,
             date="2026-01-12",
@@ -572,7 +557,7 @@ class TestNotificationService:
     def test_create_daily_summary_for_parents(self, mock_settings, sample_parent, sample_student):
         NotificationService._instance = None
         service = NotificationService()
-        ai_summary = "Hom nay cac con hoc mon Toan va Tieng Anh."
+        ai_summary = "Hôm nay các con học môn Toán và Tiếng Anh."
         notification = service.create_daily_summary_for_parents(
             parent=sample_parent,
             student=sample_student,

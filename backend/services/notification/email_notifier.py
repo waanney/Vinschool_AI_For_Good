@@ -218,7 +218,7 @@ class EmailNotifier(BaseNotifier):
         {student_info}
 
         <div class="info-box">
-            <p><span class="label">AI Confidence Score:</span> {ctx.confidence_score:.1%}</p>
+            <p><span class="label">AI Confidence Score:</span> {f'{ctx.confidence_score:.1%}' if ctx.confidence_score is not None else 'N/A'}</p>
             <p><span class="label">Subject:</span> {ctx.subject or 'Not specified'}</p>
             <p><span class="label">Reason for Escalation:</span> {ctx.reason}</p>
         </div>
@@ -287,7 +287,7 @@ class EmailNotifier(BaseNotifier):
             lines.extend([
                 "Question Details:",
                 f"  Question: {ctx.question}",
-                f"  Confidence: {ctx.confidence_score:.1%}",
+                f"  Confidence: {f'{ctx.confidence_score:.1%}' if ctx.confidence_score is not None else 'N/A'}",
                 f"  Reason: {ctx.reason}",
                 f"  Subject: {ctx.subject or 'N/A'}",
                 "",

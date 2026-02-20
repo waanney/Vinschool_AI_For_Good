@@ -277,7 +277,9 @@ async def chat_ask(request: ChatRequest):
         chat_service = get_chat_service()
 
         user_id = f"zalo-{sender}"
-        answer = await chat_service.answer(user_id=user_id, question=question, channel="zalo")
+        answer = await chat_service.answer(
+            user_id=user_id, question=question, channel="zalo", user_name=sender,
+        )
 
         # Store AI reply
         ai_msg_id = f"ai-{str(uuid.uuid4())[:8]}"

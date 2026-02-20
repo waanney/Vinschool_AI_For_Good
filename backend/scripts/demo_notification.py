@@ -5,7 +5,7 @@ Usage (feature-based):
     python scripts/demo_notification.py --escalation      # Teacher escalation: Email + Google Chat
     python scripts/demo_notification.py --low-grade       # Low grade alert: Email to teacher
     python scripts/demo_notification.py --daily-summary   # Daily summary: Google Chat to students
-    python scripts/demo_notification.py --daily-parent    # Daily summary: Zalo stub to parents
+    python scripts/demo_notification.py --daily-parent    # Daily summary: Zalo Clone UI to parents
     python scripts/demo_notification.py --all             # Run all features
 
     python scripts/demo_notification.py --dry-run         # Preview all without sending
@@ -63,7 +63,7 @@ def print_notification_preview(notification: Notification):
     if notification.escalation_context:
         ctx = notification.escalation_context
         print(f"   Question:   {ctx.question}")
-        print(f"   Confidence: {ctx.confidence_score:.1%}")
+        print(f"   Confidence: {f'{ctx.confidence_score:.1%}' if ctx.confidence_score is not None else 'N/A'}")
         if ctx.google_chat_link:
             print(f"   Chat Link:  {ctx.google_chat_link}")
 
@@ -128,18 +128,18 @@ def get_sample_parent() -> ParentInfo:
 
 # Sample AI-generated summary text (plain text, no structured fields)
 SAMPLE_AI_SUMMARY = (
-    "1. Mon Science:\n"
-    "Cac con lam thi nghiem de tim hieu ve co che hoat dong cua he tieu hoa \"digestive system\".\n"
-    "Hom qua co Oanh da phat mot phieu bai tap mon Science, cac con hoan thanh va nop lai cho co vao thu hai nhe.\n"
-    "📎 https://drive.google.com/drive/folders/1NRTD6RqkqZD7BJMuKbYtK8lQA93ouHma\n\n"
-    "2. Mon Toan:\n"
-    "Cac con on tap ve phep tinh cong va tru phan so co cung mau so \"denominator\".\n"
-    "Bai tap Toan trong workbook tuan nay: Unit 9.1, pages 93-97\n"
-    "⏰ han nop thu Ba 13/01\n"
-    "📎 https://drive.google.com/drive/folders/13VGznRDf_VggXSkonI-SeGztkLri0bXI\n\n"
-    "3. Mon Tieng Anh:\n"
-    "Cac con on tap lai cau dieu kien loai 0 \"zero conditional\" va cau hoi duoi \"question tag\".\n"
-    "📎 https://classroom.google.com/c/ODAzMTk4Mzg1ODc5/a/ODI0MTg2MTAwMDQ5/details"
+    "1. Môn Science:\n"
+    "Các con làm thí nghiệm để tìm hiểu về cơ chế hoạt động của hệ tiêu hóa \"digestive system\".\n"
+    "Hôm qua cô Oanh đã phát một phiếu bài tập môn Science, các con hoàn thành và nộp lại cho cô vào thứ hai nhé.\n"
+    "https://drive.google.com/drive/folders/1NRTD6RqkqZD7BJMuKbYtK8lQA93ouHma\n\n"
+    "2. Môn Toán:\n"
+    "Các con ôn tập về phép tính cộng và trừ phân số có cùng mẫu số \"denominator\".\n"
+    "Bài tập Toán trong workbook tuần này: Unit 9.1, pages 93-97\n"
+    "Hạn nộp thứ Ba 13/01\n"
+    "https://drive.google.com/drive/folders/13VGznRDf_VggXSkonI-SeGztkLri0bXI\n\n"
+    "3. Môn Tiếng Anh:\n"
+    "Các con ôn tập lại câu điều kiện loại 0 \"zero conditional\" và câu hỏi đuôi \"question tag\".\n"
+    "https://classroom.google.com/c/ODAzMTk4Mzg1ODc5/a/ODI0MTg2MTAwMDQ5/details"
 )
 
 
@@ -147,21 +147,25 @@ SAMPLE_AI_SUMMARY = (
 
 async def demo_teacher_escalation():
     """
-    FEATURE: Teacher Escalation
-    When AI can't answer a student question:
-      1. Student sees a Vietnamese message in chat
-      2. Teacher gets an email with question details + Google Chat link
-      3. Teacher gets a Google Chat card with "Open Chat" button
+    FEATURE: Teacher Escalation (Email only)
+    When the AI can't answer a student's question in Google Chat:
+      1. Bot replies in the shared space: "not enough info, escalating..."
+         (done by the listener's _on_debounced reply — not this demo)
+      2. Teacher gets an EMAIL with the question + a link back to that space
+         so they can open Google Chat and answer the student directly.
     """
     print_header("FEATURE: Teacher Escalation")
     print("""
-  Scenario: Student asks "Thu 6 tuan nay co kiem tra Tieng Viet khong?"
-  AI confidence is low (28%) -> triggers escalation.
+  Scenario: Student @mentions bot, asks about exam schedule.
+  Bot cannot find the answer in lesson.txt -> escalation triggered.
 
   What happens:
-    1. Student sees: "Cau hoi nay co chua co du thong tin..."
-    2. Teacher gets EMAIL with question + Google Chat link
-    3. Teacher gets GOOGLE CHAT card with "Open Chat" button
+    1. Bot says in the shared space: "Cô Hana chưa có thông tin về vấn đề này..."
+       (This is handled by the Google Chat listener — not sent here)
+    2. Teacher gets an EMAIL with:
+       - The student's question
+       - A direct link to the shared Google Chat space
+       -> Teacher opens the link, goes into the group, answers the student
     """)
 
     settings = get_settings()
@@ -173,55 +177,32 @@ async def demo_teacher_escalation():
     test_email = input(f"  Teacher email to send to [{default_email}]: ").strip() or default_email
 
     teacher = get_sample_teacher(email_override=test_email)
-    teacher.google_chat_webhook = settings.GOOGLE_CHAT_WEBHOOK_URL
 
-    # Step 1: Show student-facing message
-    print_sub("Step 1: Student sees this in chat")
-    print('  "Cau hoi nay co chua co du thong tin de tra loi.')
-    print('   Co se chuyen cau hoi sang cho giao vien de giai dap')
-    print('   som nhat cho con."')
+    # Step 1: Show student-facing message (what the bot already said in the space)
+    print_sub("Step 1: Bot reply in Google Chat space (already sent by listener)")
+    print('  "Cô Hana chưa có thông tin về vấn đề này.')
+    print('   Cô đã chuyển câu hỏi đến giáo viên chủ nhiệm,')
+    print('   thầy/cô sẽ phản hồi sớm nhất nhé con!"')
 
-    # Step 2: Send email to teacher
-    print_sub("Step 2: Email to teacher")
-    email_notification = service.create_teacher_escalation(
+    # Step 2: Email teacher with a link back to the shared space
+    print_sub("Step 2: Email to teacher (with link to Google Chat space)")
+    notification = service.create_teacher_escalation(
         teacher=teacher,
         student=student,
-        question="Thu 6 tuan nay co kiem tra Tieng Viet khong co?",
-        confidence_score=0.28,
-        reason="Khong tim thay thong tin lich kiem tra trong tai lieu",
-        ai_response="Cau hoi nay co chua co du thong tin de tra loi.",
-        subject="Tieng Viet",
+        question="Thứ 6 tuần này có kiểm tra Tiếng Việt không ạ?",
+        reason="Không tìm thấy thông tin lịch kiểm tra trong tài liệu",
+        ai_response="Cô Hana chưa có thông tin về vấn đề này.",
+        subject="Tiếng Việt",
         channel=NotificationChannel.EMAIL,
     )
-    print_notification_preview(email_notification)
+    print_notification_preview(notification)
 
     if settings.ENABLE_EMAIL_NOTIFICATIONS:
-        print(f"\n  Sending email to {test_email}...")
-        results = await service.send(email_notification)
+        print(f"\n  Sending escalation email to {test_email}...")
+        results = await service.send(notification)
         print_results(results, f"-> {test_email}")
     else:
         print("\n  [SKIP] Email disabled in .env")
-
-    # Step 3: Send Google Chat card to teacher
-    print_sub("Step 3: Google Chat card to teacher")
-    gchat_notification = service.create_teacher_escalation(
-        teacher=teacher,
-        student=student,
-        question="Thu 6 tuan nay co kiem tra Tieng Viet khong co?",
-        confidence_score=0.28,
-        reason="Khong tim thay thong tin lich kiem tra trong tai lieu",
-        ai_response="Cau hoi nay co chua co du thong tin de tra loi.",
-        subject="Tieng Viet",
-        channel=NotificationChannel.GOOGLE_CHAT,
-    )
-    print_notification_preview(gchat_notification)
-
-    if settings.ENABLE_GOOGLE_CHAT_NOTIFICATIONS and settings.GOOGLE_CHAT_WEBHOOK_URL:
-        print(f"\n  Sending to Google Chat...")
-        results = await service.send(gchat_notification)
-        print_results(results, "-> Google Chat space")
-    else:
-        print("\n  [SKIP] Google Chat disabled or no webhook in .env")
 
     print("\n  Escalation demo complete!")
 
@@ -235,7 +216,7 @@ async def demo_low_grade_alert():
     print_header("FEATURE: Low Grade Alert")
     print("""
   Scenario: Student "Can Tran Quang Bach" scored 5.0/10.0
-  on "Bai tap Phan so - Chuong 9" (threshold: 7.0)
+  on "Bài tập Phân số - Chương 9" (threshold: 7.0)
 
   What happens:
     -> Teacher gets EMAIL with score, feedback, improvement areas
@@ -254,17 +235,17 @@ async def demo_low_grade_alert():
         teacher=teacher,
         student=student,
         assignment_id="hw-demo-001",
-        assignment_title="Bai tap Phan so - Chuong 9",
+        assignment_title="Bài tập Phân số - Chương 9",
         subject="Mathematics",
         score=5.0,
         max_score=10.0,
         threshold=7.0,
-        feedback="Hoc sinh can on lai phep quy dong mau so. "
-                 "Nhieu bai tap chua rut gon ket qua cuoi cung.",
+        feedback="Học sinh cần ôn lại phép quy đồng mẫu số. "
+                 "Nhiều bài tập chưa rút gọn kết quả cuối cùng.",
         areas_for_improvement=[
-            "Quy dong mau so",
-            "Rut gon ket qua",
-            "Trinh bay bai giai",
+            "Quy đồng mẫu số",
+            "Rút gọn kết quả",
+            "Trình bày bài giải",
         ],
         channel=NotificationChannel.EMAIL,
     )
@@ -307,12 +288,13 @@ async def demo_daily_summary_students():
     )
     print_notification_preview(notification)
 
-    if settings.ENABLE_GOOGLE_CHAT_NOTIFICATIONS and settings.GOOGLE_CHAT_WEBHOOK_URL:
-        print(f"\n  Sending daily summary to Google Chat...")
+    if settings.ENABLE_GOOGLE_CHAT_NOTIFICATIONS and (settings.GOOGLE_CHAT_WEBHOOK_URL or settings.GOOGLE_CHAT_SPACE_ID):
+        gchat_mode = "Chat API" if settings.GOOGLE_CHAT_SPACE_ID and settings.GOOGLE_APPLICATION_CREDENTIALS else "Webhook"
+        print(f"\n  Sending daily summary to Google Chat ({gchat_mode})...")
         results = await service.send(notification)
         print_results(results, "-> Google Chat space")
     else:
-        print("\n  [SKIP] Google Chat disabled or no webhook in .env")
+        print("\n  [SKIP] Google Chat disabled or no webhook/space in .env")
 
     print("\n  Daily summary (students) demo complete!")
 
@@ -345,13 +327,16 @@ async def demo_daily_summary_parents():
     )
     print_notification_preview(notification)
 
-    # POST to the running Zalo server so the message appears in the UI
-    # (the in-memory store lives in the server process, not this script)
-    server_url = "http://localhost:8000/api/zalo/send-daily-summary"
+    # POST to the running Zalo server's send-demo endpoint so the message
+    # appears in the Zalo clone UI (in-memory store lives in the server process)
+    server_url = "http://localhost:8000/api/zalo/send-demo"
     print(f"\n  POSTing to {server_url}...")
     try:
         async with httpx.AsyncClient() as client:
-            resp = await client.post(server_url, json={"content": SAMPLE_AI_SUMMARY})
+            resp = await client.post(server_url, json={
+                "student_name": student.name,
+                "class_name": student.class_name,
+            })
             resp.raise_for_status()
             data = resp.json()
             print(f"  -> Success! notification_id={data.get('notification_id', 'N/A')}")
@@ -375,23 +360,22 @@ async def demo_dry_run():
     parent = get_sample_parent()
 
     demos = [
-        ("1. Teacher Escalation (Email + Google Chat)",
+        ("1. Teacher Escalation (Email only — link to Google Chat space)",
          service.create_teacher_escalation(
             teacher=teacher, student=student,
-            question="Thu 6 tuan nay co kiem tra Tieng Viet khong co?",
-            confidence_score=0.25,
-            reason="Khong tim thay thong tin lich kiem tra",
-            ai_response="Cau hoi nay co chua co du thong tin de tra loi.",
-            subject="Tieng Viet",
+            question="Thứ 6 tuần nay có kiểm tra Tiếng Việt không cô?",
+            reason="Không tìm thấy thông tin lịch kiểm tra",
+            ai_response="Cô Hana chưa có thông tin về vấn đề này.",
+            subject="Tiếng Việt",
          )),
         ("2. Low Grade Alert (Email)",
          service.create_low_grade_alert(
             teacher=teacher, student=student,
             assignment_id="hw-demo-001",
-            assignment_title="Bai tap Phan so - Chuong 9",
-            subject="Mathematics", score=5.0,
-            feedback="Hoc sinh can on lai phep quy dong mau so.",
-            areas_for_improvement=["Quy dong mau so", "Rut gon ket qua"],
+            assignment_title="Bài tập Phân số - Chương 9",
+            subject="Toán", score=5.0,
+            feedback="Học sinh cần ôn lại phép quy đồng mẫu số.",
+            areas_for_improvement=["Quy đồng mẫu số", "Rút gọn kết quả", "Trình bày bài giải"],
          )),
         ("3. Daily Summary - Students (Google Chat)",
          service.create_daily_summary_for_students(

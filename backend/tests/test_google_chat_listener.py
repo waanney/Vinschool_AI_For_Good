@@ -176,6 +176,7 @@ class TestOnDebounced:
             user_id="gchat-users/1",
             question="combined question",
             channel="gchat",
+            user_name="Student A",
         )
         # Should have been called twice: typing indicator + answer
         assert listener._reply_to_chat.call_count == 2

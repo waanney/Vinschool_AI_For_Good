@@ -161,69 +161,66 @@ def clear_history(user_id: Optional[str] = None) -> None:
 ESCALATION_MESSAGE_ZALO = (
     "Xin lỗi, cô Hana hiện không có thông tin về vấn đề này ạ. "
     "Phụ huynh vui lòng liên hệ trực tiếp giáo viên chủ nhiệm "
-    "để được hỗ trợ nhé ạ! 🙏"
+    "để được hỗ trợ nhé ạ!"
 )
 
 ESCALATION_MESSAGE_GCHAT = (
     "Cô Hana chưa có thông tin về vấn đề này. "
     "Cô đã chuyển câu hỏi đến giáo viên chủ nhiệm, "
-    "thầy/cô sẽ phản hồi sớm nhất nhé con! 📚"
+    "thầy/cô sẽ phản hồi sớm nhất nhé con!"
 )
 
 # Backward-compat alias used in a few tests
 ESCALATION_MESSAGE = ESCALATION_MESSAGE_ZALO
 
 
-async def _send_escalation_email(user_id: str, question: str) -> None:
+async def _send_escalation_email(
+    user_id: str, user_name: str, question: str
+) -> None:
     """
     Send an escalation email to the teacher.
 
-    Uses the existing EmailNotifier from the notification service.
-    Falls back to logging if email is not configured.
+    Uses the existing ``NotificationService.create_teacher_escalation()``
+    factory method so we don't duplicate notification-building logic.
+    Falls back to logging if email delivery fails.
     """
     try:
-        from services.notification.models import (
-            Notification,
-            NotificationType,
-            NotificationChannel,
-            StudentInfo,
-        )
         from services.notification import NotificationService
+        from services.notification.models import TeacherInfo, StudentInfo
 
-        service = NotificationService.for_escalation(
-            teacher_email=settings.TEACHER_EMAIL,
-            teacher_name="Giáo viên chủ nhiệm",
+        service = NotificationService()
+
+        teacher = TeacherInfo(
+            teacher_id="homeroom",
+            name="Giáo viên chủ nhiệm",
+            email=settings.TEACHER_EMAIL,
         )
 
-        notification = Notification(
-            notification_type=NotificationType.TEACHER_ESCALATION,
-            channel=NotificationChannel.EMAIL,
-            student=StudentInfo(
-                student_id=user_id,
-                name=user_id,
-                grade="4",
-                class_name="4B5",
-            ),
-            title=f"[Escalation] Câu hỏi từ phụ huynh: {question[:60]}",
-            message=(
-                f"Phụ huynh (ID: {user_id}) đã hỏi một câu ngoài phạm vi tài liệu:\n\n"
-                f"Câu hỏi: {question}\n\n"
-                f"Hệ thống AI không đủ tự tin để trả lời. "
-                f"Vui lòng phản hồi trực tiếp trong nhóm chat."
-            ),
+        student = StudentInfo(
+            student_id=user_id,
+            name=user_name,
+            grade="4",
+            class_name="4B5",
+        )
+
+        notification = service.create_teacher_escalation(
+            teacher=teacher,
+            student=student,
+            question=question,
+            reason="Câu hỏi ngoài phạm vi tài liệu, AI không đủ tự tin trả lời",
         )
 
         results = await service.send(notification)
         for r in results:
             if r.success:
-                logger.info(f"[ESCALATION] Email sent for user {user_id}")
+                logger.info(f"[ESCALATION] Email sent for {user_name} ({user_id})")
             else:
                 logger.warning(f"[ESCALATION] Email failed: {r.error_message}")
 
     except Exception as e:
-        logger.warning(f"[ESCALATION] Could not send email (may not be configured): {e}")
+        logger.warning(f"[ESCALATION] Could not send email: {e}")
         logger.info(
-            f"[ESCALATION] Question from {user_id} needs teacher attention: {question}"
+            f"[ESCALATION] Question from {user_name} needs teacher attention: {question}"
         )
 
 
@@ -274,7 +271,13 @@ class ChatService:
             f"(lesson: {len(lesson_context)} chars)"
         )
 
-    async def answer(self, user_id: str, question: str, channel: str = CHANNEL_ZALO) -> str:
+    async def answer(
+        self,
+        user_id: str,
+        question: str,
+        channel: str = CHANNEL_ZALO,
+        user_name: Optional[str] = None,
+    ) -> str:
         """
         Answer a question from a user.
 
@@ -282,10 +285,13 @@ class ChatService:
             user_id: Unique user identifier (e.g., "zalo-parent-123")
             question: The question text (already stripped of command prefix)
             channel: ``"zalo"`` (parent) or ``"gchat"`` (student)
+            user_name: Display name of the user (for escalation emails).
+                       Falls back to *user_id* if not provided.
 
         Returns:
             AI response text (plain Vietnamese)
         """
+        display_name = user_name or user_id
         try:
             # Select channel-specific agent & labels
             if channel == CHANNEL_GCHAT:
@@ -327,7 +333,7 @@ class ChatService:
                     answer_text = ESCALATION_MESSAGE_GCHAT
                     # Fire-and-forget escalation email to teacher
                     asyncio.create_task(
-                        _send_escalation_email(user_id, question)
+                        _send_escalation_email(user_id, display_name, question)
                     )
                 else:
                     answer_text = ESCALATION_MESSAGE_ZALO
