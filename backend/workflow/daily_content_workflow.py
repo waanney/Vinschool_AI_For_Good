@@ -134,8 +134,8 @@ class DailyContentWorkflow:
         """
         Send the AI-generated summary as notifications.
 
-        The plain text summary is wrapped with greeting/closing templates
-        by the NotificationService factory methods:
+        The plain text summary is passed as-is to the NotificationService
+        factory methods which send it to the appropriate channel:
         - Students get it via Google Chat
         - Parents get it via Zalo
 

@@ -9,9 +9,8 @@ In production, this would be replaced with real Zalo OA API calls.
 For this demo, it simulates Zalo delivery by making the message
 available to our clone UI.
 
-The notification message should already contain the full formatted
-text (greeting + AI summary content + closing). The notifier simply
-stores it as-is for the frontend to render.
+The notification message already contains the full AI-generated text.
+The notifier stores it as-is for the frontend to render.
 
 Used for: Daily summaries sent to parents via Zalo.
 """
@@ -44,7 +43,7 @@ class ZaloNotifier(BaseNotifier):
     via GET /api/zalo/messages.
 
     The `notification.message` field is expected to contain the full
-    formatted text (greeting + content + closing) ready for display.
+    AI-generated text ready for display.
     """
 
     def __init__(
@@ -104,8 +103,7 @@ class ZaloNotifier(BaseNotifier):
         Format notification into a plain-text dict for the frontend.
 
         The frontend renders this as a Zalo chat bubble showing the
-        full message text (which already contains greeting + content
-        + closing assembled by NotificationService factory methods).
+        full AI-generated message text.
         """
         now = datetime.now()
 

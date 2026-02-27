@@ -71,7 +71,7 @@ class GoogleChatNotifier(BaseNotifier):
     def channel_name(self) -> str:
         return "google_chat"
 
-    # ---- Credential helpers (Chat API mode) ----
+    # ===== Credential helpers (Chat API mode) =====
 
     def _load_credentials(self):
         """Load service-account credentials for the Chat API."""
@@ -101,7 +101,7 @@ class GoogleChatNotifier(BaseNotifier):
             self._credentials.refresh(Request())
         return self._credentials.token
 
-    # ---- Config validation ----
+    # ===== Config validation =====
 
     async def validate_config(self) -> tuple[bool, Optional[str]]:
         """Validate Google Chat configuration."""
@@ -127,7 +127,7 @@ class GoogleChatNotifier(BaseNotifier):
             return await self._send_via_chat_api(notification)
         return await self._send_via_webhook(notification)
 
-    # ---- Chat API mode ----
+    # ===== Chat API mode =====
 
     def _resolve_space(self, notification: Notification) -> Optional[str]:
         """Resolve the Google Chat space name for this notification.
@@ -210,7 +210,7 @@ class GoogleChatNotifier(BaseNotifier):
                 error_message=f"Chat API error: {e}",
             )
 
-    # ---- Webhook mode (legacy) ----
+    # ===== Webhook mode (legacy) =====
 
     async def _send_via_webhook(self, notification: Notification) -> NotificationResult:
         """Send using an incoming webhook URL (legacy fallback)."""
@@ -289,8 +289,6 @@ class GoogleChatNotifier(BaseNotifier):
         """
         Create a plain text message for daily summary (student/parent facing).
 
-        The notification.message already contains the full formatted text
-        (greeting + AI summary content + closing) assembled by the
-        NotificationService factory methods.
+        The notification.message already contains the full AI-generated text.
         """
         return {"text": notification.message}
