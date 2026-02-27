@@ -118,6 +118,10 @@ class Settings(BaseSettings):
     # Low grade alert threshold (score out of max_score)
     LOW_GRADE_THRESHOLD: float = 7.0
 
+    # Daily summary scheduler
+    DAILY_SUMMARY_HOUR: int = 18  # Fire at this hour (24h, local time)
+    DAILY_SUMMARY_MINUTE: int = 0  # Fire at this minute
+
     # Security
     secret_key: str = "change_me_in_production"
     algorithm: str = "HS256"
