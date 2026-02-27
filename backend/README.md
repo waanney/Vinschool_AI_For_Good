@@ -4,67 +4,74 @@ Multi-agent AI system for educational support built with PydanticAI, Milvus, and
 
 ## Features
 
-###  Teaching Assistant Agent
+### Teaching Assistant Agent
+
 - **Question Answering**: RAG-based question answering with context retrieval
 - **Content Summarization**: Daily lesson summaries for students and parents
 - **Exercise Generation**: Personalized practice problems based on student level
 - **Smart Escalation**: Automatic routing to teachers for complex questions
 
-###  Content Processing Agent
+### Content Processing Agent
+
 - **Document Parsing**: Supports PPTX, DOCX, PDF, and images
 - **Vietnamese OCR**: Tesseract-based OCR with Vietnamese language support
 - **Vector Embeddings**: Automatic embedding generation and storage in Milvus
 - **Metadata Extraction**: Keyword and summary generation
 
-###  Grading Agent
+### Grading Agent
+
 - **Automated Grading**: Rubric-based homework evaluation
 - **Handwriting Support**: OCR for handwritten submissions
 - **Detailed Feedback**: Strengths, improvements, and personalized comments
 - **Teacher Override**: Teachers can review and adjust AI grades
 
 ### Notification Service
+
 - **Multi-Channel Delivery**: Email (SMTP), Google Chat (Webhooks), Zalo (clone UI with REST polling)
 - **Teacher Escalation**: Automatic email to teacher when AI confidence is low, with link to the Google Chat space where the student asked
 - **Low Grade Alert**: Email to teacher when a student scores below threshold (default: 7.0/10.0)
-- **Daily Summary (Students)**: AI-generated plain text summary sent to class Google Chat group with greeting/closing templates
-- **Daily Summary (Parents)**: Same AI summary with formal greeting/closing sent to Zalo clone UI
+- **Daily Summary (Students)**: AI-generated plain text summary sent to class Google Chat group
+- **Daily Summary (Parents)**: Same AI summary sent to Zalo clone UI
+- **Automatic Scheduler**: `DailySummaryScheduler` fires at 18:00 every day (configurable via `DAILY_SUMMARY_HOUR`/`DAILY_SUMMARY_MINUTE`) to send the daily summary to both channels
 - **Workflow Integration**: `DailyContentWorkflow` automatically sends notifications after generating the AI summary
 - **Retry Logic**: Automatic retry with exponential backoff for failed deliveries
 
 ### Interactive Chat Service (Cô Hana)
+
 - **Channel-Aware AI**: Two separate personas — parent-facing (Zalo) and student-facing (Google Chat)
-- **Zalo `/ask` Command**: Parents type `/ask <question>` in the Zalo clone UI for instant AI answers
-- **Google Chat @mention**: Students @mention the bot in Google Chat for AI help
+- **Zalo commands**: `/ask <question>` (AI Q&A), `/dailysum` (AI-generated daily summary), `/demosum` (hardcoded demo summary — no API cost)
+- **Google Chat commands**: Same three commands when @mentioning the bot; any other mention is silently ignored
+- **Single-Message Flow**: Every command returns exactly one reply — no intermediate "thinking" or typing indicator messages
 - **Message Debouncing**: Rapid messages from the same user are batched (3s quiet window) into a single AI request
 - **Conversation History**: Per-user history (last 10 messages) for contextual follow-ups
 - **Smart Escalation**: Zalo → polite apology only; Google Chat → email to teacher + student notification
-- **Lesson Context**: AI answers are grounded in `data/lesson.txt` content
+- **Lesson Context**: AI answers are grounded in lesson data — reads from **Milvus** in production, falls back to `data/lesson.txt` for local development
 
 ## Architecture
 
-```
+```text
 ┌─────────────────────────────────────────────────────┐
-│                   FastAPI Application                │
-│  ┌────────────┐  ┌────────────┐  ┌────────────┐    │
-│  │  Teacher   │  │  Student   │  │   Admin    │    │
-│  │   Routes   │  │   Routes   │  │   Routes   │    │
-│  └────────────┘  └────────────┘  └────────────┘    │
+│                   FastAPI Application               │
+│  ┌────────────┐  ┌────────────┐  ┌────────────┐     │
+│  │  Teacher   │  │  Student   │  │   Admin    │     │
+│  │   Routes   │  │   Routes   │  │   Routes   │     │
+│  └────────────┘  └────────────┘  └────────────┘     │
 └─────────────────────────────────────────────────────┘
                           │
 ┌─────────────────────────────────────────────────────┐
-│              Workflow Orchestration                  │
-│  ┌──────────────┐  ┌───────────┐  ┌──────────┐     │
-│  │Daily Content │  │ Question  │  │ Homework │     │
-│  │   Workflow   │  │ Workflow  │  │ Workflow │     │
-│  └──────────────┘  └───────────┘  └──────────┘     │
+│              Workflow Orchestration                 │
+│  ┌──────────────┐  ┌───────────┐  ┌──────────┐      │
+│  │Daily Content │  │ Question  │  │ Homework │      │
+│  │   Workflow   │  │ Workflow  │  │ Workflow │      │
+│  └──────────────┘  └───────────┘  └──────────┘      │
 └─────────────────────────────────────────────────────┘
                           │
 ┌─────────────────────────────────────────────────────┐
-│               PydanticAI Agents                      │
-│  ┌──────────────┐  ┌───────────┐  ┌──────────┐     │
-│  │  Teaching    │  │  Content  │  │ Grading  │     │
-│  │  Assistant   │  │ Processor │  │  Agent   │     │
-│  └──────────────┘  └───────────┘  └──────────┘     │
+│               PydanticAI Agents                     │
+│  ┌──────────────┐  ┌───────────┐  ┌──────────┐      │
+│  │  Teaching    │  │  Content  │  │ Grading  │      │
+│  │  Assistant   │  │ Processor │  │  Agent   │      │
+│  └──────────────┘  └───────────┘  └──────────┘      │
 └─────────────────────────────────────────────────────┘
                           │
 ┌─────────────────────────────────────────────────────┐
@@ -79,8 +86,8 @@ Multi-agent AI system for educational support built with PydanticAI, Milvus, and
 │  ┌──────────────────────────────────────────────┐   │
 │  │        Chat Service (Cô Hana AI)             │   │
 │  │  ┌───────────────┐  ┌────────────────────┐   │   │
-│  │  │ Zalo /ask     │  │ Google Chat @bot   │   │   │
-│  │  │ (parents)     │  │ (students)         │   │   │
+│  │  │     Zalo      │  │ Google Chat @bot   │   │   │
+│  │  │   (parents)   │  │    (students)      │   │   │
 │  │  └───────────────┘  └────────────────────┘   │   │
 │  │        ↕ Debouncer → PydanticAI Agent        │   │
 │  └──────────────────────────────────────────────┘   │
@@ -95,6 +102,7 @@ Multi-agent AI system for educational support built with PydanticAI, Milvus, and
 ## Quick Start
 
 ### Prerequisites
+
 - Docker and Docker Compose
 - **API Key** for one of:
   - OpenAI API key, OR
@@ -105,11 +113,13 @@ Multi-agent AI system for educational support built with PydanticAI, Milvus, and
 ### Installation
 
 1. **Clone and navigate to backend**
+
    ```bash
    cd backend
    ```
 
 2. **Set up environment variables**
+
    ```bash
    cp .env.example .env
    ```
@@ -117,6 +127,7 @@ Multi-agent AI system for educational support built with PydanticAI, Milvus, and
    Edit `.env` and configure your LLM provider:
 
    **Option 1: OpenAI (default)**
+
    ```bash
    DEFAULT_PROVIDER=openai
    OPENAI_API_KEY=sk-your-openai-key
@@ -124,6 +135,7 @@ Multi-agent AI system for educational support built with PydanticAI, Milvus, and
    ```
 
    **Option 2: Google Gemini**
+
    ```bash
    DEFAULT_PROVIDER=google
    GEMINI_API_KEY=your-gemini-api-key
@@ -131,6 +143,7 @@ Multi-agent AI system for educational support built with PydanticAI, Milvus, and
    ```
 
    **Option 3: Anthropic**
+
    ```bash
    DEFAULT_PROVIDER=anthropic
    ANTHROPIC_API_KEY=your-anthropic-key
@@ -138,17 +151,19 @@ Multi-agent AI system for educational support built with PydanticAI, Milvus, and
    ```
 
 3. **Start services with Docker Compose**
+
    ```bash
    docker-compose up -d
    ```
 
 4. **Access the application**
-   - API Documentation: http://localhost:8000/docs
-   - Milvus Management UI (Attu): http://localhost:3000
+   - API Documentation: [http://localhost:8000/docs](http://localhost:8000/docs)
+   - Milvus Management UI (Attu): [http://localhost:3000](http://localhost:3000)
 
 ### Development Setup (Without Docker)
 
 **Using uv (recommended - faster)**
+
 ```bash
 # Install uv if not already installed
 curl -LsSf https://astral.sh/uv/install.sh | sh
@@ -164,6 +179,7 @@ uvicorn api.main:app --reload
 ```
 
 **Using pip**
+
 ```bash
 pip install -e .[dev]
 docker-compose up -d milvus postgres
@@ -210,47 +226,48 @@ curl -X POST "http://localhost:8000/api/student/homework/submit" \
 
 ## Project Structure
 
-```
+```text
 backend/
-├── agents/                 # PydanticAI agents
-│   ├── base/              # Base agent classes
-│   ├── teaching_assistant/ # Q&A, summarization, exercises
-│   ├── content_processor/ # Document processing
-│   └── grading/           # Homework grading
-├── api/                   # FastAPI application
-│   ├── main.py           # App initialization
-│   └── routes/           # API endpoints
-├── config/               # Configuration management
-├── database/             # Database clients
-│   ├── milvus_client.py  # Milvus vector DB
-│   ├── postgres_client.py # PostgreSQL
-│   └── repositories/     # Data access layer
-├── domain/               # Domain models (DDD)
-│   ├── models/          # Entities
-│   └── repositories/    # Repository interfaces
-├── services/                       # Business services
-│   ├── chat/                       # Interactive AI chat (Cô Hana)
-│   │   ├── chat_service.py         # Channel-aware LLM orchestrator
-│   │   ├── debouncer.py            # Per-user message debouncing
-│   │   └── google_chat_listener.py # Pub/Sub consumer + Chat API replier
-│   └── notification/               # Notification service
-│       ├── models.py               # Notification data models
-│       ├── base.py                 # BaseNotifier interface
-│       ├── email_notifier.py       # SMTP email (escalation + low grade)
-│       ├── google_chat_notifier.py # Google Chat (daily summary only)
-│       ├── zalo_notifier.py        # Zalo clone UI (in-memory store → REST polling)
-│       └── notification_service.py # Main orchestrator + factory methods
-├── utils/                # Utilities
-│   ├── embeddings.py    # Embedding generation
-│   ├── document_parser.py # Document parsing
-│   └── logger.py        # Logging setup
-├── workflow/             # Workflow orchestration
+├── agents/                  # PydanticAI agents
+│   ├── base/                # Base agent classes
+│   ├── teaching_assistant/  # Q&A, summarization, exercises
+│   ├── content_processor/   # Document processing
+│   └── grading/             # Homework grading
+├── api/                     # FastAPI application
+│   ├── main.py              # App initialization
+│   └── routes/              # API endpoints
+├── config/                  # Configuration management
+├── database/                # Database clients
+│   ├── milvus_client.py     # Milvus vector DB
+│   ├── postgres_client.py   # PostgreSQL
+│   └── repositories/        # Data access layer
+├── domain/                  # Domain models (DDD)
+│   ├── models/              # Entities
+│   └── repositories/        # Repository interfaces
+├── services/                        # Business services
+│   ├── chat/                        # Interactive AI chat (Cô Hana)
+│   │   ├── chat_service.py          # Channel-aware LLM orchestrator
+│   │   ├── debouncer.py             # Per-user message debouncing
+│   │   └── google_chat_listener.py  # Pub/Sub consumer + Chat API replier
+│   ├── scheduler.py                 # 6pm daily summary scheduler + /dailysum trigger
+│   └── notification/                # Notification service
+│       ├── models.py                # Notification data models
+│       ├── base.py                  # BaseNotifier interface
+│       ├── email_notifier.py        # SMTP email (escalation + low grade)
+│       ├── google_chat_notifier.py  # Google Chat (daily summary only)
+│       ├── zalo_notifier.py         # Zalo clone UI (in-memory store → REST polling)
+│       └── notification_service.py  # Main orchestrator + factory methods
+├── utils/                   # Utilities
+│   ├── embeddings.py        # Embedding generation
+│   ├── document_parser.py   # Document parsing
+│   └── logger.py            # Logging setup
+├── workflow/                # Workflow orchestration
 │   ├── daily_content_workflow.py
 │   ├── question_answering_workflow.py
 │   └── homework_grading_workflow.py
-├── docker-compose.yml    # Docker orchestration
-├── Dockerfile           # Container definition
-└── pyproject.toml       # Dependencies
+├── docker-compose.yml       # Docker orchestration
+├── Dockerfile               # Container definition
+└── pyproject.toml           # Dependencies
 ```
 
 ## Design Principles
@@ -277,6 +294,7 @@ backend/
 The system supports **multiple LLM providers**. Configure in `.env`:
 
 #### OpenAI (GPT-4)
+
 ```bash
 DEFAULT_PROVIDER=openai
 OPENAI_API_KEY=sk-your-key
@@ -285,6 +303,7 @@ GRADING_LLM_MODEL=gpt-4-turbo-preview
 ```
 
 #### Google Gemini
+
 ```bash
 DEFAULT_PROVIDER=google
 GEMINI_API_KEY=your-gemini-key
@@ -293,6 +312,7 @@ GRADING_LLM_MODEL=gemini-1.5-pro
 ```
 
 #### Anthropic (Claude)
+
 ```bash
 DEFAULT_PROVIDER=anthropic
 ANTHROPIC_API_KEY=your-anthropic-key
@@ -322,19 +342,24 @@ DEFAULT_LLM_MODEL=gpt-4-turbo-preview
 # Workflows
 ENABLE_AUTO_GRADING=true
 TEACHER_ESCALATION_THRESHOLD=0.6
+
+# Daily Summary Scheduler (24-hour clock)
+DAILY_SUMMARY_HOUR=18
+DAILY_SUMMARY_MINUTE=0
 ```
 
-### Notification Service
+### Notification Service Configuration
 
 The Notification Service sends **one-way** messages to teachers, students, and parents.
 Each notification type targets specific channels — there is no chat or reply.
 
-| Type                     | Channel(s)      | When it fires                                                            |
-| ------------------------ | --------------- | ------------------------------------------------------------------------ |
-| Teacher Escalation       | Email (SMTP)    | AI not confident → email teacher with link to the Google Chat space      |
-| Low Grade Alert          | Email (SMTP)    | Student scores below threshold (default 7/10)                            |
-| Daily Summary (students) | Google Chat     | `DailyContentWorkflow` generates AI summary → text posted to class space |
-| Daily Summary (parents)  | Zalo clone UI   | Same AI summary with formal greeting/closing → stored for REST polling   |
+| Type                     | Channel(s)    | When it fires                                                                                            |
+| ------------------------ | ------------- | -------------------------------------------------------------------------------------------------------- |
+| Teacher Escalation       | Email (SMTP)  | AI not confident → email teacher with link to the Google Chat space                                      |
+| Low Grade Alert          | Email (SMTP)  | Student scores below threshold (default 7/10)                                                            |
+| Daily Summary (students) | Google Chat   | `DailyContentWorkflow` generates AI summary → text posted to class space                                 |
+| Daily Summary (parents)  | Zalo clone UI | Same AI summary → stored for REST polling                                                                |
+| Daily Summary (auto)     | Both channels | `DailySummaryScheduler` fires automatically at `DAILY_SUMMARY_HOUR:DAILY_SUMMARY_MINUTE` (default 18:00) |
 
 #### Email (SMTP) Setup
 
@@ -353,11 +378,12 @@ ENABLE_EMAIL_NOTIFICATIONS=true
 SMTP_HOST=smtp.gmail.com
 SMTP_PORT=587
 SMTP_USERNAME=your-email@gmail.com
-SMTP_PASSWORD=your-app-password # abcdefghijklmnop (no spaces)
+SMTP_PASSWORD=your-app-password                 # abcdefghijklmnop (no spaces)
 SMTP_USE_TLS=true
+TEACHER_EMAIL=teacher@vinschool.edu.vn          # Recipient for escalation/low-grade emails
 NOTIFICATION_SENDER_EMAIL=your-email@gmail.com  # Must match SMTP_USERNAME for Gmail
 NOTIFICATION_SENDER_NAME=Vinschool AI Assistant
-TEACHER_EMAIL=teacher@vinschool.edu.vn          # Recipient for escalation/low-grade emails
+
 LOW_GRADE_THRESHOLD=7.0                         # Students scoring below this get flagged
 ```
 
@@ -393,8 +419,10 @@ Configure a GCP service account with Chat API access and set the space name.
 
 ```bash
 ENABLE_GOOGLE_CHAT_NOTIFICATIONS=true
-GOOGLE_CHAT_SPACE_NAME=spaces/AAAA_BBBB
-GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json
+GOOGLE_CLOUD_PROJECT_ID=your-gcp-project-id
+GOOGLE_CHAT_PUBSUB_SUBSCRIPTION=projects/your-gcp-project-id/subscriptions/chat-events-sub
+GOOGLE_APPLICATION_CREDENTIALS=credentials/your-service-account-key.json
+GOOGLE_CHAT_SPACE_ID=spaces/AAAAxxxxxx
 ```
 
 #### Zalo Clone UI
@@ -402,30 +430,19 @@ GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json
 The Zalo channel stores plain-text messages in-memory; the frontend polls `GET /api/zalo/messages` every 3 seconds.
 
 **How it works:**
+
 1. `DailyContentWorkflow` generates AI summary
-2. `NotificationService` wraps it with greeting/closing templates
-3. `ZaloNotifier` stores the full text in `zalo_message_store`
-4. Frontend (`ZaloDesktopChat.tsx` / `ZaloMobileChat.tsx`) polls and renders
-
-**Message format:**
-```
-Bố mẹ các con thân mến,
-Cô Hana xin gửi nội dung học tập 2 buổi hôm nay của các con ạ:
-
-<AI-generated summary content here>
-
-Kính mong bố mẹ nhắc nhở các con hoàn thành bài tập đầy đủ giúp cô ạ.
-Cảm ơn bố mẹ các con đã đọc tin ạ!
-```
+2. `ZaloNotifier` stores the AI's full text in `zalo_message_store`
+3. Frontend (`ZaloDesktopChat.tsx` / `ZaloMobileChat.tsx`) polls and renders
 
 **Zalo API endpoints:**
 
-| Method   | Endpoint              | Description                                                          |
-| -------- | --------------------- | -------------------------------------------------------------------- |
-| `GET`    | `/api/zalo/messages`  | List all stored messages                                             |
-| `POST`   | `/api/zalo/send-demo` | Send the hardcoded daily summary to the Zalo UI                      |
-| `POST`   | `/api/zalo/chat`      | `/ask` chat with AI (user msg surfaced by frontend, AI reply stored) |
-| `DELETE` | `/api/zalo/messages`  | Clear all messages                                                   |
+| Method   | Endpoint              | Description                                                  |
+| -------- | --------------------- | ------------------------------------------------------------ |
+| `GET`    | `/api/zalo/messages`  | List all stored messages                                     |
+| `POST`   | `/api/zalo/send-demo` | Send the hardcoded daily summary to the Zalo UI              |
+| `POST`   | `/api/zalo/chat`      | `/ask` — AI Q&A; `/dailysum` — AI summary; `/demosum` — demo |
+| `DELETE` | `/api/zalo/messages`  | Clear all messages                                           |
 
 > **Note:** This uses an in-memory store — messages are lost when the server restarts. For production, replace with Zalo OA API integration.
 
@@ -440,21 +457,24 @@ Cảm ơn bố mẹ các con đã đọc tin ạ!
 | `python scripts/demo_notification.py --daily-parent`  | Send daily summary to Zalo clone UI (requires `run_zalo_server`) |
 | `python scripts/demo_notification.py --all`           | Run all demos above                                              |
 
-### Chat Service (Cô Hana)
+### Chat Service Configuration
 
 The Chat Service provides **bidirectional** AI Q&A. Students and parents can ask questions and receive instant answers grounded in `data/lesson.txt`.
 
-| Channel     | Audience | Trigger           | Persona               | Escalation Behaviour           |
-| ----------- | -------- | ----------------- | --------------------- | ------------------------------ |
-| Zalo clone  | Parents  | `/ask <question>` | Kính ngữ (formal)     | Apologise — no email           |
-| Google Chat | Students | @mention bot      | Thân thiện (friendly) | Email teacher + notify student |
+| Channel     | Audience | Commands                                   | Persona               | Escalation Behaviour           |
+| ----------- | -------- | ------------------------------------------ | --------------------- | ------------------------------ |
+| Zalo clone  | Parents  | `/ask <question>`, `/dailysum`, `/demosum` | Kính ngữ (formal)     | Apologise — no email           |
+| Google Chat | Students | `/ask <question>`, `/dailysum`, `/demosum` | Thân thiện (friendly) | Email teacher + notify student |
+
+> **Google Chat prefix required**: The bot only responds to messages that start with `/ask`, `/dailysum`, or `/demosum`. Any other @mention is silently ignored.
 
 **Key features:**
+
 - **Message debouncing**: Rapid messages from the same user are batched (3 s quiet window) into a single AI request
 - **Conversation history**: Per-user history (last 10 messages) for contextual follow-ups
 - **Smart escalation**: When confidence is low, Google Chat triggers an email to the teacher with a link to the space; Zalo sends a polite apology only
 
-#### Zalo `/ask` — Quick Test
+#### Zalo commands — Quick Test
 
 ```bash
 # Terminal 1 — Start standalone Zalo server
@@ -464,24 +484,45 @@ cd backend && python -m scripts.run_zalo_server
 cd frontend && npm run dev
 ```
 
-1. Open http://localhost:3000/zalo-desktop (or `/zalo-mobile`)
+1. Open [http://localhost:3000/zalo-desktop](http://localhost:3000/zalo-desktop) (or [http://localhost:3000/zalo-mobile](http://localhost:3000/zalo-mobile)) to access the Zalo clone UI
 2. Type `/ask Bài tập Toán tuần này là gì?` in the chat
+3. Type `/dailysum` to get an AI-generated daily summary
+4. Type `/demosum` to get the hardcoded demo summary (no API cost)
 
 Or test from terminal:
 
 ```bash
+# Ask a question
 curl -X POST http://localhost:8000/api/zalo/chat \
   -H "Content-Type: application/json" \
   -d '{"sender": "Phụ huynh Alex", "text": "/ask Bài tập Toán tuần này là gì?"}'
+
+# AI-generated daily summary
+curl -X POST http://localhost:8000/api/zalo/chat \
+  -H "Content-Type: application/json" \
+  -d '{"sender": "Phụ huynh Alex", "text": "/dailysum"}'
+
+# Hardcoded demo summary (no API cost)
+curl -X POST http://localhost:8000/api/zalo/chat \
+  -H "Content-Type: application/json" \
+  -d '{"sender": "Phụ huynh Alex", "text": "/demosum"}'
 ```
 
-#### Google Chat @mention
+#### Google Chat commands
 
-Students @mention the bot in the Google Chat space. Run the listener:
+Students use `/ask`, `/dailysum`, or `/demosum` when @mentioning the bot. Run the listener:
 
 ```bash
 cd backend && python -m scripts.run_google_chat
 ```
+
+The bot only responds to `/ask`, `/dailysum`, and `/demosum` prefixes. For example:
+
+- `@Vinschool Bot /ask Hôm nay học bài gì?`
+- `@Vinschool Bot /dailysum`
+- `@Vinschool Bot /demosum`
+
+Every command returns a single reply — no intermediate typing indicators.
 
 #### Chat Demos
 
@@ -499,17 +540,17 @@ TEACHER_EMAIL=teacher@vinschool.edu.vn  # Recipient for escalation emails
 ## Testing
 
 ```bash
-# Run all tests (89 tests)
+# Run all tests (101 tests)
 pytest tests/ -v
 
 # Run with coverage
 pytest --cov=. --cov-report=html
 
 # Run specific test suites
-pytest tests/test_chat_service.py -v           # ChatService (24 tests)
-pytest tests/test_debouncer.py -v              # MessageDebouncer (9 tests)
-pytest tests/test_google_chat_listener.py -v   # GoogleChatListener (10 tests)
-pytest tests/test_notification_service.py -v   # NotificationService (46 tests)
+pytest tests/test_chat_service.py -v          # ChatService (30 tests)
+pytest tests/test_debouncer.py -v             # MessageDebouncer (9 tests)
+pytest tests/test_google_chat_listener.py -v  # GoogleChatListener (16 tests)
+pytest tests/test_notification_service.py -v  # NotificationService (46 tests)
 ```
 
 ## Contributing
