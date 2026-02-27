@@ -30,6 +30,7 @@ from services.notification import (
     Notification,
 )
 from config.settings import get_settings
+from services.scheduler import DEMO_LESSON_CONTENT_STUDENTS, DEMO_LESSON_CONTENT_PARENTS
 
 
 # ===== Helpers =====
@@ -126,30 +127,14 @@ def get_sample_parent() -> ParentInfo:
     )
 
 
-# Sample AI-generated summary text (plain text, no structured fields)
-SAMPLE_AI_SUMMARY = (
-    "1. Môn Science:\n"
-    "Các con làm thí nghiệm để tìm hiểu về cơ chế hoạt động của hệ tiêu hóa \"digestive system\".\n"
-    "Hôm qua cô Oanh đã phát một phiếu bài tập môn Science, các con hoàn thành và nộp lại cho cô vào thứ hai nhé.\n"
-    "https://drive.google.com/drive/folders/1NRTD6RqkqZD7BJMuKbYtK8lQA93ouHma\n\n"
-    "2. Môn Toán:\n"
-    "Các con ôn tập về phép tính cộng và trừ phân số có cùng mẫu số \"denominator\".\n"
-    "Bài tập Toán trong workbook tuần này: Unit 9.1, pages 93-97\n"
-    "Hạn nộp thứ Ba 13/01\n"
-    "https://drive.google.com/drive/folders/13VGznRDf_VggXSkonI-SeGztkLri0bXI\n\n"
-    "3. Môn Tiếng Anh:\n"
-    "Các con ôn tập lại câu điều kiện loại 0 \"zero conditional\" và câu hỏi đuôi \"question tag\".\n"
-    "https://classroom.google.com/c/ODAzMTk4Mzg1ODc5/a/ODI0MTg2MTAwMDQ5/details"
-)
-
-
 # ===== Feature Demos =====
 
 async def demo_teacher_escalation():
     """
     FEATURE: Teacher Escalation (Email only)
     When the AI can't answer a student's question in Google Chat:
-      1. Bot replies in the shared space: "not enough info, escalating..."
+      1. Bot replies in the shared space with the escalation message
+         ("Cô Hana chưa có thông tin về vấn đề này...")
          (done by the listener's _on_debounced reply — not this demo)
       2. Teacher gets an EMAIL with the question + a link back to that space
          so they can open Google Chat and answer the student directly.
@@ -284,7 +269,7 @@ async def demo_daily_summary_students():
     notification = service.create_daily_summary_for_students(
         student=student,
         date="2026-01-12",
-        content=SAMPLE_AI_SUMMARY,
+        content=DEMO_LESSON_CONTENT_STUDENTS,
     )
     print_notification_preview(notification)
 
@@ -323,7 +308,7 @@ async def demo_daily_summary_parents():
         parent=parent,
         student=student,
         date="2026-01-12",
-        content=SAMPLE_AI_SUMMARY,
+        content=DEMO_LESSON_CONTENT_PARENTS,
     )
     print_notification_preview(notification)
 
@@ -336,6 +321,7 @@ async def demo_daily_summary_parents():
             resp = await client.post(server_url, json={
                 "student_name": student.name,
                 "class_name": student.class_name,
+                "message": notification.message,
             })
             resp.raise_for_status()
             data = resp.json()
@@ -380,12 +366,12 @@ async def demo_dry_run():
         ("3. Daily Summary - Students (Google Chat)",
          service.create_daily_summary_for_students(
             student=student, date="2026-01-12",
-            content=SAMPLE_AI_SUMMARY,
+            content=DEMO_LESSON_CONTENT_STUDENTS,
          )),
         ("4. Daily Summary - Parents (Zalo clone UI)",
          service.create_daily_summary_for_parents(
             parent=parent, student=student, date="2026-01-12",
-            content=SAMPLE_AI_SUMMARY,
+            content=DEMO_LESSON_CONTENT_PARENTS,
          )),
     ]
 
