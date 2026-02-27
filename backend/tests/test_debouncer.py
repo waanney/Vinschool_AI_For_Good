@@ -17,9 +17,7 @@ from unittest.mock import AsyncMock
 from services.chat.debouncer import MessageDebouncer
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
+# ===== Helpers =====
 
 
 def _make_debouncer(
@@ -32,9 +30,7 @@ def _make_debouncer(
     return db, callback
 
 
-# ---------------------------------------------------------------------------
-# Basic fire behavior
-# ---------------------------------------------------------------------------
+# ===== Basic fire behavior =====
 
 
 class TestDebouncerFire:
@@ -81,9 +77,7 @@ class TestDebouncerFire:
         assert user_ids == {"user-A", "user-B"}
 
 
-# ---------------------------------------------------------------------------
-# flush
-# ---------------------------------------------------------------------------
+# ===== flush =====
 
 
 class TestDebouncerFlush:
@@ -116,9 +110,7 @@ class TestDebouncerFlush:
         assert db.pending_count() == 0
 
 
-# ---------------------------------------------------------------------------
-# Metadata
-# ---------------------------------------------------------------------------
+# ===== Metadata =====
 
 
 class TestDebouncerMetadata:
@@ -137,9 +129,7 @@ class TestDebouncerMetadata:
         assert kwargs["thread_name"] == "threads/1"
 
 
-# ---------------------------------------------------------------------------
-# pending_count
-# ---------------------------------------------------------------------------
+# ===== pending_count =====
 
 
 class TestDebouncerPendingCount:
