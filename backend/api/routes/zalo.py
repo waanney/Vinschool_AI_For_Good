@@ -4,8 +4,9 @@ Zalo notification API endpoints.
 Provides REST endpoints for the Zalo clone UI to fetch plain-text
 messages sent by the notification service. Also includes a demo
 endpoint to trigger a sample daily summary, a send-daily-summary
-endpoint for wiring the real workflow output, and a /ask chat
-endpoint for interactive Q&A with the AI assistant.
+endpoint for wiring the real workflow output, and a chat endpoint
+that handles /ask (AI Q&A), /dailysum (AI summary), and /demosum
+(hardcoded demo summary) commands.
 """
 
 from datetime import datetime
@@ -21,6 +22,7 @@ from services.notification.models import (
     StudentInfo,
     ParentInfo,
 )
+from services.scheduler import DEMO_LESSON_CONTENT, DEMO_LESSON_CONTENT_PARENTS
 from utils.logger import logger
 
 router = APIRouter()
@@ -48,6 +50,7 @@ class DemoSendRequest(BaseModel):
     student_name: str = "Alex"
     class_name: str = "4B5"
     date: Optional[str] = None  # defaults to today
+    message: Optional[str] = None  # if provided, used instead of DEMO_PLAIN_TEXT
 
 
 class DemoSendResponse(BaseModel):
@@ -64,26 +67,9 @@ class SendDailySummaryRequest(BaseModel):
     class_name: str = "4B5"
 
 
-# ===== Template strings =====
-
-PARENT_GREETING = "Bố mẹ các con thân mến,\nCô Hana xin gửi nội dung học tập 2 buổi hôm nay của các con ạ:\n\n"
-PARENT_CLOSING = "\n\nKính mong bố mẹ nhắc nhở các con hoàn thành bài tập đầy đủ giúp cô ạ.\nCảm ơn bố mẹ các con đã đọc tin ạ!"
-
-# Demo content (used by send-demo when no real AI summary is available)
-DEMO_PLAIN_TEXT = (
-    "1. Môn Science:\n"
-    "Tìm hiểu cơ chế hoạt động của hệ tiêu hoá \"digestive system\".\n"
-    "Cô Oanh đã phát một phiếu bài tập môn Science, các con hoàn thành và nộp lại cho cô vào thứ Hai nhé.\n"
-    "📎 https://drive.google.com/drive/folders/example1\n\n"
-    "2. Môn Toán:\n"
-    "Cộng và trừ phân số có cùng mẫu số \"denominator\". Bắt đầu học khác mẫu số.\n"
-    "Bài tập Toán trong workbook tuần này: Unit 9.1, pages 93-97\n"
-    "⏰ hạn nộp thứ Ba 13/01\n"
-    "📎 https://drive.google.com/drive/folders/example2\n\n"
-    "3. Môn Tiếng Anh:\n"
-    "Ôn tập câu điều kiện loại 0 \"zero conditional\" và câu hỏi đuôi.\n"
-    "📎 https://classroom.google.com/c/example3"
-)
+# Demo content — /send-demo uses the raw lesson data; /demosum (chat) uses parent-facing text.
+DEMO_PLAIN_TEXT = DEMO_LESSON_CONTENT
+DEMO_PLAIN_TEXT_PARENTS = DEMO_LESSON_CONTENT_PARENTS
 
 
 # ===== Endpoints =====
@@ -113,11 +99,8 @@ async def send_demo_notification(request: DemoSendRequest = DemoSendRequest()):
     """
     Send a demo daily summary notification to the Zalo message store.
 
-    Uses hardcoded demo content wrapped with greeting/closing templates.
-    Use this to test the Zalo clone UI without running the full backend pipeline.
+    Uses hardcoded demo content as-is.
     """
-    full_text = PARENT_GREETING + DEMO_PLAIN_TEXT + PARENT_CLOSING
-
     notification = Notification(
         notification_type=NotificationType.DAILY_SUMMARY,
         channel=NotificationChannel.ZALO,
@@ -132,7 +115,7 @@ async def send_demo_notification(request: DemoSendRequest = DemoSendRequest()):
             name=f"Phụ huynh {request.student_name}",
         ),
         title=f"Daily Summary - {request.date or datetime.now().strftime('%d/%m/%Y')}",
-        message=full_text,
+        message=request.message or DEMO_PLAIN_TEXT,
     )
 
     notifier = ZaloNotifier(enabled=True)
@@ -157,12 +140,9 @@ async def send_daily_summary(request: SendDailySummaryRequest):
     """
     Send a daily summary notification with AI-generated content.
 
-    Wraps the provided plain-text content with greeting/closing
-    templates and stores it in the Zalo message store.
+    Stores the content as-is in the Zalo message store.
     This is the endpoint the daily content workflow calls.
     """
-    full_text = PARENT_GREETING + request.content + PARENT_CLOSING
-
     notification = Notification(
         notification_type=NotificationType.DAILY_SUMMARY,
         channel=NotificationChannel.ZALO,
@@ -177,7 +157,7 @@ async def send_daily_summary(request: SendDailySummaryRequest):
             name=f"Phụ huynh {request.student_name}",
         ),
         title=f"Daily Summary - {datetime.now().strftime('%d/%m/%Y')}",
-        message=full_text,
+        message=request.content,
     )
 
     notifier = ZaloNotifier(enabled=True)
@@ -207,13 +187,13 @@ async def clear_zalo_messages():
 # ===== Chat /ask endpoint =====
 
 class ChatRequest(BaseModel):
-    """Request body for the /ask chat endpoint."""
+    """Request body for the chat endpoint (/ask, /dailysum, /demosum)."""
     sender: str = "Phụ huynh Alex"
     text: str
 
 
 class ChatResponse(BaseModel):
-    """Response from the /ask chat endpoint."""
+    """Response from the chat endpoint."""
     success: bool
     reply: str = ""
     is_ask: bool = False
@@ -227,8 +207,11 @@ async def chat_ask(request: ChatRequest):
     """
     Handle a chat message from the Zalo clone UI.
 
-    If the message starts with '/ask', the question is forwarded to
-    the AI assistant (ChatService) and the response is returned.
+    Routes commands to the AI assistant (ChatService):
+    - /ask <question>  — AI Q&A
+    - /dailysum        — AI-generated daily lesson summary
+    - /demosum         — hardcoded demo summary (no API cost)
+
     Both the user message and AI reply are stored in zalo_message_store
     so the UI can display them via polling GET /messages.
 
@@ -250,6 +233,50 @@ async def chat_ask(request: ChatRequest):
         "time": now,
         "is_ai": False,
     })
+
+    # Check for /dailysum prefix — AI-generated summary
+    if text.lower().startswith("/dailysum"):
+        try:
+            from services.chat import get_chat_service
+            chat_service = get_chat_service()
+            summary = await chat_service.summarize_daily(channel="zalo")
+        except Exception as e:
+            logger.error(f"[ZALO-CHAT] /dailysum AI error: {e}")
+            summary = "Xin lỗi, hệ thống AI đang gặp sự cố khi tạo tóm tắt. Vui lòng thử lại sau ạ."
+
+        ai_msg_id = f"ai-{str(uuid.uuid4())[:8]}"
+        zalo_message_store.append({
+            "id": ai_msg_id,
+            "sender": "Cô Hana (AI)",
+            "text": summary,
+            "time": now,
+            "is_ai": True,
+        })
+        return ChatResponse(
+            success=True,
+            reply=summary,
+            is_ask=True,
+            user_msg_id=user_msg_id,
+            ai_msg_id=ai_msg_id,
+        )
+
+    # Check for /demosum prefix — hardcoded demo summary (no AI cost)
+    if text.lower().startswith("/demosum"):
+        ai_msg_id = f"ai-{str(uuid.uuid4())[:8]}"
+        zalo_message_store.append({
+            "id": ai_msg_id,
+            "sender": "Cô Hana (AI)",
+            "text": DEMO_PLAIN_TEXT_PARENTS,
+            "time": now,
+            "is_ai": True,
+        })
+        return ChatResponse(
+            success=True,
+            reply=DEMO_PLAIN_TEXT_PARENTS,
+            is_ask=True,
+            user_msg_id=user_msg_id,
+            ai_msg_id=ai_msg_id,
+        )
 
     # Check for /ask prefix
     is_ask = text.startswith("/ask")

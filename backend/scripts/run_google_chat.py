@@ -11,8 +11,11 @@ Usage:
     cd backend
     python -m scripts.run_google_chat
 
-The script also starts a minimal HTTP server on port 8000 so you can
-test Zalo /ask chat at the same time via POST /api/zalo/chat.
+Students interact with the bot in Google Chat using:
+    @Vinschool Bot /ask <question>       — AI Q&A
+    @Vinschool Bot /dailysum             — demo daily lesson summary
+
+The script starts a minimal HTTP server on port 8000.
 """
 
 import sys
@@ -25,16 +28,12 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
-from pydantic import BaseModel
-from typing import Optional
 
 from config import settings
 from utils.logger import logger
 
 
-# ---------------------------------------------------------------------------
-# Config check — runs before server starts
-# ---------------------------------------------------------------------------
+# ===== Config check — runs before server starts =====
 
 def _print_config() -> bool:
     """Print current Google Chat configuration and return True if all OK."""
@@ -64,9 +63,7 @@ def _print_config() -> bool:
     return all_ok
 
 
-# ---------------------------------------------------------------------------
-# Lifespan — starts/stops Google Chat listener
-# ---------------------------------------------------------------------------
+# ===== Lifespan — starts/stops Google Chat listener =====
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -89,12 +86,8 @@ async def lifespan(app: FastAPI):
     print("  ✅ Google Chat Pub/Sub listener started")
     print()
     print("  Now send a message in Google Chat:")
-    print("    @Vinschool Bot Bài tập Toán tuần này là gì?")
-    print()
-    print("  Or test Zalo /ask via HTTP:")
-    print('    curl -X POST http://localhost:8000/api/zalo/chat \\')
-    print('      -H "Content-Type: application/json" \\')
-    print('      -d \'{"text": "/ask Bài tập Toán tuần này?"}\'')
+    print("    @Vinschool Bot /ask Bài tập Toán tuần này là gì?")
+    print("    @Vinschool Bot /dailysum")
     print()
     print("  Press Ctrl+C to stop")
     print("=" * 60 + "\n")
@@ -106,9 +99,7 @@ async def lifespan(app: FastAPI):
     print("\n  Google Chat listener stopped.")
 
 
-# ---------------------------------------------------------------------------
-# FastAPI app
-# ---------------------------------------------------------------------------
+# ===== FastAPI app =====
 
 app = FastAPI(title="Google Chat Demo Server", lifespan=lifespan)
 
@@ -125,72 +116,11 @@ app.add_middleware(
 async def root():
     return {
         "status": "Google Chat demo server running",
-        "google_chat": "Pub/Sub listener active — @mention the bot in Google Chat",
-        "zalo_chat": "POST /api/zalo/chat with {sender, text} (/ask prefix)",
+        "usage": "Send /ask <question>, /dailysum, or /demosum in Google Chat",
     }
 
 
-# ---------------------------------------------------------------------------
-# Zalo /ask endpoint (so both platforms can be tested from one server)
-# ---------------------------------------------------------------------------
-
-class ChatRequest(BaseModel):
-    sender: str = "Phụ huynh Alex"
-    text: str
-
-
-class ChatResponse(BaseModel):
-    success: bool
-    reply: str = ""
-    is_ask: bool = False
-    error: Optional[str] = None
-    user_msg_id: Optional[str] = None
-    ai_msg_id: Optional[str] = None
-
-
-@app.post("/api/zalo/chat", response_model=ChatResponse)
-async def chat_ask(request: ChatRequest):
-    """Handle /ask chat from Zalo UI (or curl)."""
-    text = request.text.strip()
-    sender = request.sender.strip()
-
-    is_ask = text.startswith("/ask")
-    if not is_ask:
-        return ChatResponse(success=True, reply="", is_ask=False)
-
-    question = text[4:].strip()
-    if not question:
-        return ChatResponse(
-            success=True,
-            reply="Vui lòng nhập câu hỏi sau /ask ạ.\nVí dụ: /ask Bài tập Toán tuần này là gì?",
-            is_ask=True,
-        )
-
-    try:
-        from services.chat import get_chat_service
-
-        chat_service = get_chat_service()
-        user_id = f"zalo-{sender}"
-        answer = await chat_service.answer(
-            user_id=user_id, question=question, channel="zalo", user_name=sender,
-        )
-
-        logger.info(f"[DEMO] /ask from {sender}: {question[:60]} → {len(answer)} chars")
-        return ChatResponse(success=True, reply=answer, is_ask=True)
-
-    except Exception as e:
-        logger.error(f"[DEMO] Error: {e}")
-        return ChatResponse(
-            success=False,
-            reply="Xin lỗi, hệ thống AI đang gặp sự cố. Vui lòng thử lại sau ạ.",
-            is_ask=True,
-            error=str(e),
-        )
-
-
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
+# ===== Main =====
 
 if __name__ == "__main__":
     ok = _print_config()

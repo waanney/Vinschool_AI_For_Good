@@ -33,10 +33,16 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.warning(f"Google Chat listener not started: {e}")
 
+    # Start daily summary scheduler
+    from services.scheduler import get_scheduler
+    scheduler = get_scheduler()
+    scheduler.start()
+
     yield
 
     # Shutdown
     logger.info("Shutting down Vinschool AI Backend...")
+    scheduler.stop()
     if gchat_listener:
         gchat_listener.stop()
         logger.info("Google Chat Pub/Sub listener stopped.")

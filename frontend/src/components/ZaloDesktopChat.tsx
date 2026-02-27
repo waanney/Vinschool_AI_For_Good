@@ -127,8 +127,8 @@ export const ZaloDesktopChat: React.FC = () => {
 
         const text = inputText.trim();
 
-        // If message starts with /ask, send to backend first and wait for response
-        if (text.startsWith("/ask")) {
+        // If message starts with /, it's a command — send to backend
+        if (text.startsWith("/")) {
             setInputText("");
 
             // Show the user's message immediately — don't wait for the round-trip
@@ -272,19 +272,7 @@ export const ZaloDesktopChat: React.FC = () => {
                         </div>
                     ))}
 
-                    {/* Typing indicator */}
-                    {isTyping && (
-                        <div className="flex gap-3 self-start max-w-[85%]">
-                            <div className="w-8 h-8 bg-[#0068ff] rounded-full flex-shrink-0 flex items-center justify-center text-white text-[10px] font-bold mt-1">AI</div>
-                            <div className="p-4 rounded-xl shadow-[0_1px_2px_rgba(0,0,0,0.1)] border bg-white border-[#dbdee1]">
-                                <p className="text-[11px] font-bold mb-1 text-blue-700">Cô Hana (AI)</p>
-                                <div className="flex items-center gap-1">
-                                    <span className="text-[14px] text-gray-400 italic">Đang tra cứu thông tin</span>
-                                    <span className="animate-pulse text-blue-500">...</span>
-                                </div>
-                            </div>
-                        </div>
-                    )}
+
                 </div>
 
                 {/* Footer soạn thảo chuẩn Desktop */}
@@ -297,7 +285,7 @@ export const ZaloDesktopChat: React.FC = () => {
                     </div>
                     <textarea
                         className="w-full h-full bg-transparent border-none focus:outline-none text-[14px] resize-none px-2 text-gray-600 font-medium placeholder:text-gray-300"
-                        placeholder="Gõ /ask + câu hỏi để hỏi AI, ví dụ: /ask Bài tập Toán tuần này?"
+                        placeholder="/ask Bài tập Toán? · /dailysum · /demosum"
                         value={inputText}
                         onChange={(e) => setInputText(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSendMessage())}

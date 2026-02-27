@@ -319,28 +319,13 @@ class NotificationService:
         content: str,
         channel: NotificationChannel = NotificationChannel.GOOGLE_CHAT,
     ) -> Notification:
-        """
-        Create daily summary notification for students (Google Chat).
-
-        Wraps the AI-generated plain text content with a student-facing
-        greeting and closing template.
-
-        Args:
-            student: Student info
-            date: Date string (e.g. "2026-01-12")
-            content: AI-generated plain text summary
-            channel: Delivery channel (default: Google Chat)
-        """
-        greeting = "Các con thân mến,\nCô Hana gửi lại nội dung buổi học ngày hôm nay của các con,\n\n"
-        closing = "\n\nCác con nhớ hoàn thành bài tập đầy đủ nhé!"
-        full_message = greeting + content + closing
-
+        """Create daily summary notification for students (Google Chat)."""
         return Notification(
             notification_type=NotificationType.DAILY_SUMMARY,
             channel=channel,
             student=student,
             title=f"Daily Summary - {date}",
-            message=full_message,
+            message=content,
         )
 
     def create_daily_summary_for_parents(
@@ -351,30 +336,14 @@ class NotificationService:
         content: str,
         channel: NotificationChannel = NotificationChannel.ZALO,
     ) -> Notification:
-        """
-        Create daily summary notification for parents (Zalo).
-
-        Wraps the AI-generated plain text content with a parent-facing
-        greeting and closing template (more formal tone).
-
-        Args:
-            parent: Parent info
-            student: Student info
-            date: Date string (e.g. "2026-01-12")
-            content: AI-generated plain text summary
-            channel: Delivery channel (default: Zalo)
-        """
-        greeting = "Bố mẹ các con thân mến,\nCô Hana xin gửi nội dung học tập 2 buổi hôm nay của các con ạ:\n\n"
-        closing = "\n\nKính mong bố mẹ nhắc nhở các con hoàn thành bài tập đầy đủ giúp cô ạ.\nCảm ơn bố mẹ các con đã đọc tin ạ!"
-        full_message = greeting + content + closing
-
+        """Create daily summary notification for parents (Zalo)."""
         return Notification(
             notification_type=NotificationType.DAILY_SUMMARY,
             channel=channel,
             student=student,
             parent=parent,
             title=f"Daily Summary - {date}",
-            message=full_message,
+            message=content,
         )
 
 

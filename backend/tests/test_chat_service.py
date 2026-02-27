@@ -16,9 +16,7 @@ import asyncio
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch, mock_open
 
-# ---------------------------------------------------------------------------
-# Fixtures
-# ---------------------------------------------------------------------------
+# ===== Fixtures =====
 
 SAMPLE_LESSON = "Bài học phân số: 1/3 + 1/4 = 7/12"
 
@@ -51,9 +49,7 @@ def _make_chat_service(answer_text: str = "[CONFIDENT] OK"):
     return svc
 
 
-# ---------------------------------------------------------------------------
-# load_lesson_context
-# ---------------------------------------------------------------------------
+# ===== load_lesson_context =====
 
 
 class TestLoadLessonContext:
@@ -102,9 +98,7 @@ class TestLoadLessonContext:
             mod._LESSON_FILE = original
 
 
-# ---------------------------------------------------------------------------
-# build_system_prompt
-# ---------------------------------------------------------------------------
+# ===== build_system_prompt =====
 
 
 class TestBuildSystemPrompt:
@@ -154,9 +148,7 @@ class TestBuildSystemPrompt:
         assert "phụ huynh" not in prompt.split("Quy tắc")[0]  # persona section
 
 
-# ---------------------------------------------------------------------------
-# _create_model
-# ---------------------------------------------------------------------------
+# ===== _create_model =====
 
 
 class TestCreateModel:
@@ -188,9 +180,7 @@ class TestCreateModel:
                 _create_model()
 
 
-# ---------------------------------------------------------------------------
-# ChatService.answer — CONFIDENT path
-# ---------------------------------------------------------------------------
+# ===== ChatService.answer — CONFIDENT path =====
 
 
 class TestChatServiceConfident:
@@ -214,9 +204,7 @@ class TestChatServiceConfident:
         assert "Bài tập Toán là gì?" in prompt
 
 
-# ---------------------------------------------------------------------------
-# ChatService.answer — ESCALATE path
-# ---------------------------------------------------------------------------
+# ===== ChatService.answer — ESCALATE path =====
 
 
 class TestChatServiceEscalate:
@@ -259,9 +247,7 @@ class TestChatServiceEscalate:
             mock_create_task.assert_called_once()
 
 
-# ---------------------------------------------------------------------------
-# ChatService.answer — error handling
-# ---------------------------------------------------------------------------
+# ===== ChatService.answer — error handling =====
 
 
 class TestChatServiceError:
@@ -283,9 +269,7 @@ class TestChatServiceError:
         assert "sự cố" in answer  # "hệ thống AI đang gặp sự cố"
 
 
-# ---------------------------------------------------------------------------
-# Conversation history
-# ---------------------------------------------------------------------------
+# ===== Conversation history =====
 
 
 class TestConversationHistory:
@@ -372,9 +356,7 @@ class TestConversationHistory:
         assert _get_history("B") == []
 
 
-# ---------------------------------------------------------------------------
-# Singleton helpers
-# ---------------------------------------------------------------------------
+# ===== Singleton helpers =====
 
 
 class TestSingleton:
@@ -392,3 +374,68 @@ class TestSingleton:
         mod._chat_service = "dummy"
         reset_chat_service()
         assert mod._chat_service is None
+
+
+# ===== ChatService.summarize_daily =====
+
+
+class TestSummarizeDaily:
+    """Tests for ChatService.summarize_daily()."""
+
+    @pytest.mark.asyncio
+    async def test_returns_ai_summary(self):
+        """summarize_daily() calls the agent and returns the summary."""
+        svc = _make_chat_service("[CONFIDENT] Tóm tắt bài học hôm nay: Toán, Khoa học, Tiếng Anh.")
+        result = await svc.summarize_daily(channel="zalo")
+        assert "Tóm tắt bài học" in result
+        assert "[CONFIDENT]" not in result
+
+    @pytest.mark.asyncio
+    async def test_strips_escalate_tag(self):
+        """summarize_daily() strips [ESCALATE] tag if LLM returns it."""
+        svc = _make_chat_service("[ESCALATE] Không có dữ liệu.")
+        result = await svc.summarize_daily(channel="zalo")
+        assert "[ESCALATE]" not in result
+
+    @pytest.mark.asyncio
+    async def test_gchat_channel_uses_gchat_agent(self):
+        """summarize_daily(channel='gchat') uses the gchat agent."""
+        svc = _make_chat_service("[CONFIDENT] Student summary.")
+        await svc.summarize_daily(channel="gchat")
+        svc._agent_gchat.run.assert_called_once()
+        prompt = svc._agent_gchat.run.call_args[0][0]
+        assert "[SUMMARIZE]" in prompt
+
+    @pytest.mark.asyncio
+    async def test_zalo_channel_uses_zalo_agent(self):
+        """summarize_daily(channel='zalo') uses the zalo agent."""
+        svc = _make_chat_service("[CONFIDENT] Parent summary.")
+        await svc.summarize_daily(channel="zalo")
+        svc._agent_zalo.run.assert_called_once()
+        prompt = svc._agent_zalo.run.call_args[0][0]
+        assert "[SUMMARIZE]" in prompt
+
+    @pytest.mark.asyncio
+    async def test_no_lesson_context_returns_error(self):
+        """When lesson context is empty, returns a user-friendly error."""
+        from services.chat.chat_service import ChatService, clear_history
+
+        clear_history()
+        svc = ChatService(lesson_context="", model="test")
+        result = await svc.summarize_daily()
+        assert "chưa có dữ liệu" in result
+
+    @pytest.mark.asyncio
+    async def test_exception_returns_error_message(self):
+        """On LLM exception, returns a user-friendly error string."""
+        from services.chat.chat_service import ChatService, clear_history
+
+        clear_history()
+        svc = ChatService(lesson_context=SAMPLE_LESSON, model="test")
+        mock_agent = MagicMock()
+        mock_agent.run = AsyncMock(side_effect=RuntimeError("API down"))
+        svc._agent_zalo = mock_agent
+        svc._agent_gchat = mock_agent
+
+        result = await svc.summarize_daily()
+        assert "sự cố" in result

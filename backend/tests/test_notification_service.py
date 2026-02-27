@@ -549,10 +549,7 @@ class TestNotificationService:
         )
         assert notification.notification_type == NotificationType.DAILY_SUMMARY
         assert notification.channel == NotificationChannel.GOOGLE_CHAT
-        # Full message should contain greeting + content + closing
-        assert ai_summary in notification.message
-        assert "Các con thân mến" in notification.message
-        assert "hoàn thành bài tập" in notification.message
+        assert notification.message == ai_summary
 
     def test_create_daily_summary_for_parents(self, mock_settings, sample_parent, sample_student):
         NotificationService._instance = None
@@ -567,10 +564,7 @@ class TestNotificationService:
         assert notification.notification_type == NotificationType.DAILY_SUMMARY
         assert notification.channel == NotificationChannel.ZALO
         assert notification.parent is not None
-        # Full message should contain greeting + content + closing
-        assert ai_summary in notification.message
-        assert "Bố mẹ các con thân mến" in notification.message
-        assert "Cảm ơn bố mẹ" in notification.message
+        assert notification.message == ai_summary
 
     @pytest.mark.asyncio
     async def test_send_notification_email_only(self, mock_settings, sample_escalation_notification):

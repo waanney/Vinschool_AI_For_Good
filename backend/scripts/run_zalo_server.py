@@ -1,6 +1,6 @@
 """
 Lightweight standalone server for testing the Zalo notification API
-and /ask chat feature.
+and chat commands (/ask, /dailysum, /demosum).
 
 Run this directly to test the Zalo notifier -> UI connection
 without needing PostgreSQL, Milvus, or other services.
@@ -47,24 +47,10 @@ app.add_middleware(
 
 # ===== Template strings =====
 
-DEMO_PLAIN_TEXT = (
-    "Bố mẹ các con thân mến,\n"
-    "Cô Hana xin gửi nội dung học tập 2 buổi hôm nay của các con ạ:\n\n"
-    "1. Môn Science:\n"
-    "Tìm hiểu cơ chế hoạt động của hệ tiêu hoá \"digestive system\".\n"
-    "Cô Oanh đã phát một phiếu bài tập môn Science, các con hoàn thành và nộp lại cho cô vào thứ Hai nhé.\n"
-    "https://drive.google.com/drive/folders/example1\n\n"
-    "2. Môn Toán:\n"
-    "Cộng và trừ phân số có cùng mẫu số \"denominator\". Bắt đầu học khác mẫu số.\n"
-    "Bài tập Toán trong workbook tuần này: Unit 9.1, pages 93-97\n"
-    "Hạn nộp thứ Ba 13/01\n"
-    "https://drive.google.com/drive/folders/example2\n\n"
-    "3. Môn Tiếng Anh:\n"
-    "Ôn tập câu điều kiện loại 0 \"zero conditional\" và câu hỏi đuôi.\n"
-    "https://classroom.google.com/c/example3\n\n"
-    "Kính mong bố mẹ nhắc nhở các con hoàn thành bài tập đầy đủ giúp cô ạ.\n"
-    "Cảm ơn bố mẹ các con đã đọc tin ạ!"
-)
+# Demo lesson content — imported from scheduler so all commands share the same fixture.
+from services.scheduler import DEMO_LESSON_CONTENT, DEMO_LESSON_CONTENT_PARENTS
+DEMO_PLAIN_TEXT = DEMO_LESSON_CONTENT
+DEMO_PLAIN_TEXT_PARENTS = DEMO_LESSON_CONTENT_PARENTS
 
 
 # ===== Request/Response models =====
@@ -73,16 +59,17 @@ class DemoSendRequest(BaseModel):
     student_name: str = "Alex"
     class_name: str = "4B5"
     date: Optional[str] = None
+    message: Optional[str] = None  # if provided, used instead of DEMO_PLAIN_TEXT
 
 
 class ChatRequest(BaseModel):
-    """Request body for the /ask chat endpoint."""
+    """Request body for the chat endpoint."""
     sender: str = "Phụ huynh Alex"
     text: str
 
 
 class ChatResponse(BaseModel):
-    """Response from the /ask chat endpoint."""
+    """Response from the chat endpoint."""
     success: bool
     reply: str = ""
     is_ask: bool = False
@@ -91,11 +78,11 @@ class ChatResponse(BaseModel):
     ai_msg_id: Optional[str] = None
 
 
-# ---- shared /chat handler (single source of truth) ----
+# ===== Shared /chat handler =====
 
 async def _handle_chat(sender: str, text: str) -> ChatResponse:
     """
-    Shared /ask chat logic used by both run_zalo_server and api/routes/zalo.py.
+    Shared chat logic for /ask, /dailysum, and /demosum commands.
 
     Kept here as a thin wrapper so the standalone script doesn't depend
     on the full api/ package (which needs PostgreSQL/Milvus init).
@@ -109,6 +96,44 @@ async def _handle_chat(sender: str, text: str) -> ChatResponse:
     user_msg_id = f"user-{str(uuid.uuid4())[:8]}"
 
     is_ask = text.startswith("/ask")
+
+    # /dailysum command — AI-generated daily summary
+    if text.lower().startswith("/dailysum"):
+        try:
+            from services.chat.chat_service import get_chat_service
+            chat_service = get_chat_service()
+            summary = await chat_service.summarize_daily(channel="zalo")
+        except Exception as e:
+            summary = f"Xin lỗi, hệ thống AI đang gặp sự cố khi tạo tóm tắt. Vui lòng thử lại sau ạ."
+
+        ai_msg_id = f"ai-{str(uuid.uuid4())[:8]}"
+        zalo_message_store.append({
+            "id": ai_msg_id,
+            "sender": "Cô Hana (AI)",
+            "text": summary,
+            "time": now,
+            "is_ai": True,
+        })
+        return ChatResponse(
+            success=True, reply=summary, is_ask=True,
+            user_msg_id=user_msg_id, ai_msg_id=ai_msg_id,
+        )
+
+    # /demosum command — hardcoded demo summary (no AI cost)
+    if text.lower().startswith("/demosum"):
+        ai_msg_id = f"ai-{str(uuid.uuid4())[:8]}"
+        zalo_message_store.append({
+            "id": ai_msg_id,
+            "sender": "Cô Hana (AI)",
+            "text": DEMO_PLAIN_TEXT_PARENTS,
+            "time": now,
+            "is_ai": True,
+        })
+        return ChatResponse(
+            success=True, reply=DEMO_PLAIN_TEXT_PARENTS, is_ask=True,
+            user_msg_id=user_msg_id, ai_msg_id=ai_msg_id,
+        )
+
     if not is_ask:
         return ChatResponse(success=True, reply="", is_ask=False, user_msg_id=user_msg_id)
 
@@ -191,7 +216,7 @@ async def send_demo(request: DemoSendRequest = DemoSendRequest()):
             name=f"Phụ huynh {request.student_name}",
         ),
         title=f"Daily Summary - {request.date or datetime.now().strftime('%d/%m/%Y')}",
-        message=DEMO_PLAIN_TEXT,
+        message=request.message or DEMO_PLAIN_TEXT,
     )
 
     notifier = ZaloNotifier(enabled=True)
@@ -216,7 +241,8 @@ async def chat_ask(request: ChatRequest):
     """
     Handle a chat message from the Zalo clone UI.
 
-    If the message starts with '/ask', send to ChatService and return AI response.
+    Routes /ask, /dailysum, and /demosum to ChatService.
+    Other messages are stored as-is without an AI reply.
     """
     return await _handle_chat(request.sender, request.text)
 
@@ -228,7 +254,7 @@ async def root():
         "endpoints": [
             "GET  /api/zalo/messages      — retrieve all stored messages",
             "POST /api/zalo/send-demo     — push the hardcoded demo summary to the Zalo UI",
-            "POST /api/zalo/chat          — /ask chat with the AI (used by the clone UI)",
+            "POST /api/zalo/chat          — /ask /dailysum /demosum (used by the clone UI)",
             "DELETE /api/zalo/messages    — clear all stored messages",
         ],
     }
@@ -237,7 +263,7 @@ async def root():
 if __name__ == "__main__":
     print("\n🚀 Zalo Test Server starting on http://localhost:8000")
     print("   POST   http://localhost:8000/api/zalo/send-demo    -> push the demo summary to the Zalo UI")
-    print("   POST   http://localhost:8000/api/zalo/chat         -> /ask chat with AI")
+    print("   POST   http://localhost:8000/api/zalo/chat         -> /ask /dailysum /demosum")
     print("   GET    http://localhost:8000/api/zalo/messages     -> see stored messages")
     print("   DELETE http://localhost:8000/api/zalo/messages     -> clear messages")
     print("   Then check http://localhost:3000/zalo/desktop      -> see it in the UI\n")

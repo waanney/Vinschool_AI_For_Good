@@ -125,8 +125,8 @@ export const ZaloMobileChat: React.FC = () => {
 
         const text = inputText.trim();
 
-        // If message starts with /ask, send to backend first and wait for response
-        if (text.startsWith("/ask")) {
+        // If message starts with /, it's a command — send to backend
+        if (text.startsWith("/")) {
             setInputText("");
 
             // Show the user's message immediately — don't wait for the round-trip
@@ -249,24 +249,14 @@ export const ZaloMobileChat: React.FC = () => {
                     </div>
                 ))}
 
-                {/* Typing indicator */}
-                {isTyping && (
-                    <div className="self-start max-w-[95%]">
-                        <div className="p-4 rounded-2xl shadow-sm border bg-white rounded-tl-none border-gray-100">
-                            <div className="flex items-center gap-1">
-                                <span className="text-[13.5px] text-gray-400 italic">Đang tra cứu</span>
-                                <span className="animate-pulse text-blue-500">...</span>
-                            </div>
-                        </div>
-                    </div>
-                )}
+
             </div>
 
             {/* Input Mobile */}
             <div className="p-3 bg-white border-t flex items-center gap-3 pb-8">
                 <input
                     className="flex-1 bg-gray-100 rounded-full px-4 py-2 text-sm focus:outline-none placeholder: text-black"
-                    placeholder="Gõ /ask + câu hỏi, ví dụ: /ask Bài tập Toán?"
+                    placeholder="/ask Bài tập Toán? · /dailysum · /demosum"
                     value={inputText}
                     onChange={(e) => setInputText(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}

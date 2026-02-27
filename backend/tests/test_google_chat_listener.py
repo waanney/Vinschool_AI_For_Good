@@ -3,7 +3,7 @@ Unit tests for the GoogleChatListener.
 
 Tests cover:
 - _parse_chat_event() — decoding Pub/Sub messages
-- _process_event() — @mention routing through debouncer
+- _process_event() — slash command routing (/ask, /dailysum, /demosum)
 - start()/stop() lifecycle
 - Singleton get_google_chat_listener()
 
@@ -19,9 +19,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from services.chat.google_chat_listener import GoogleChatListener
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
+# ===== Helpers =====
 
 
 def _make_pubsub_message(text: str, user_name: str = "users/123",
@@ -45,7 +43,7 @@ def _make_pubsub_message(text: str, user_name: str = "users/123",
 
 def _make_listener() -> tuple[GoogleChatListener, AsyncMock, AsyncMock]:
     """
-    Create a GoogleChatListener with mocked ChatService and reply method.
+    Create a GoogleChatListener with mocked ChatService and reply/delete methods.
     """
     mock_chat = MagicMock()
     mock_chat.answer = AsyncMock(return_value="AI answer")
@@ -53,14 +51,13 @@ def _make_listener() -> tuple[GoogleChatListener, AsyncMock, AsyncMock]:
     mock_debouncer.add = AsyncMock()
 
     listener = GoogleChatListener(chat_service=mock_chat, debouncer=mock_debouncer)
-    listener._reply_to_chat = AsyncMock()  # Mock the Chat API reply
+    listener._reply_to_chat = AsyncMock(return_value="spaces/abc/messages/msg-123")
+    listener._delete_message = AsyncMock()
 
     return listener, mock_chat, mock_debouncer
 
 
-# ---------------------------------------------------------------------------
-# _parse_chat_event
-# ---------------------------------------------------------------------------
+# ===== _parse_chat_event =====
 
 
 class TestParseChatEvent:
@@ -106,21 +103,19 @@ class TestParseChatEvent:
         assert result is None
 
 
-# ---------------------------------------------------------------------------
-# _process_event
-# ---------------------------------------------------------------------------
+# ===== _process_event =====
 
 
 class TestProcessEvent:
     """Tests for _process_event()."""
 
     @pytest.mark.asyncio
-    async def test_message_added_to_debouncer(self):
-        """Any @mention message is added to the debouncer."""
+    async def test_ask_message_added_to_debouncer(self):
+        """"/ask <question> is stripped and forwarded to the debouncer."""
         listener, _, mock_debouncer = _make_listener()
 
         event = {
-            "text": "Bài tập Toán tuần này là gì?",
+            "text": "/ask Bài tập Toán tuần này là gì?",
             "user_id": "users/123",
             "user_name": "Student A",
             "space_name": "spaces/abc",
@@ -131,12 +126,49 @@ class TestProcessEvent:
         mock_debouncer.add.assert_called_once()
         call_kwargs = mock_debouncer.add.call_args
         assert call_kwargs[1]["user_id"] == "gchat-users/123"
+        # /ask prefix is stripped before passing to debouncer
         assert call_kwargs[1]["text"] == "Bài tập Toán tuần này là gì?"
 
     @pytest.mark.asyncio
-    async def test_empty_message_sends_hint(self):
-        """Empty text (just @mention, no question) sends a usage hint."""
+    async def test_non_command_message_ignored(self):
+        """Messages without /ask or /dailysum prefix are silently ignored."""
+        listener, _, mock_debouncer = _make_listener()
+
+        event = {
+            "text": "Chào cô!",  # No command prefix
+            "user_id": "users/123",
+            "user_name": "Student A",
+            "space_name": "spaces/abc",
+            "thread_name": "threads/t1",
+        }
+        await listener._process_event(event)
+
+        # Debouncer not touched, no reply sent
+        mock_debouncer.add.assert_not_called()
+        listener._reply_to_chat.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_ask_with_no_question_sends_hint(self):
+        """/ask with no question text sends a usage hint."""
         listener, _, _ = _make_listener()
+
+        event = {
+            "text": "/ask",
+            "user_id": "users/123",
+            "user_name": "Student A",
+            "space_name": "spaces/abc",
+            "thread_name": "threads/t1",
+        }
+        await listener._process_event(event)
+
+        listener._reply_to_chat.assert_called_once()
+        reply_text = listener._reply_to_chat.call_args[0][1]
+        assert "/ask" in reply_text  # Hint message refers to /ask
+
+    @pytest.mark.asyncio
+    async def test_empty_message_ignored(self):
+        """Completely empty text is silently ignored."""
+        listener, _, mock_debouncer = _make_listener()
 
         event = {
             "text": "",
@@ -147,14 +179,91 @@ class TestProcessEvent:
         }
         await listener._process_event(event)
 
+        mock_debouncer.add.assert_not_called()
+        listener._reply_to_chat.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_dailysum_command_handled(self):
+        """/dailysum triggers _handle_dailysum (typing + summary + delete)."""
+        listener, _, mock_debouncer = _make_listener()
+
+        with patch(
+            "services.chat.google_chat_listener.GoogleChatListener._handle_dailysum",
+            new_callable=AsyncMock,
+        ) as mock_handle:
+            event = {
+                "text": "/dailysum",
+                "user_id": "users/123",
+                "user_name": "Student A",
+                "space_name": "spaces/abc",
+                "thread_name": "threads/t1",
+            }
+            await listener._process_event(event)
+
+        mock_handle.assert_called_once_with(event)
+        mock_debouncer.add.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_demosum_command_handled(self):
+        """/demosum triggers _handle_demosum (hardcoded summary)."""
+        listener, _, mock_debouncer = _make_listener()
+
+        with patch(
+            "services.chat.google_chat_listener.GoogleChatListener._handle_demosum",
+            new_callable=AsyncMock,
+        ) as mock_handle:
+            event = {
+                "text": "/demosum",
+                "user_id": "users/123",
+                "user_name": "Student A",
+                "space_name": "spaces/abc",
+                "thread_name": "threads/t1",
+            }
+            await listener._process_event(event)
+
+        mock_handle.assert_called_once_with(event)
+        mock_debouncer.add.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_handle_demosum_posts_hardcoded_content(self):
+        """_handle_demosum sends the hardcoded DEMO_LESSON_CONTENT_STUDENTS."""
+        listener, _, _ = _make_listener()
+
+        event = {
+            "text": "/demosum",
+            "user_id": "users/123",
+            "user_name": "Student A",
+            "space_name": "spaces/abc",
+            "thread_name": "threads/t1",
+        }
+        await listener._handle_demosum(event)
+
+        # Should have a single reply call (no typing indicator)
         listener._reply_to_chat.assert_called_once()
+        listener._delete_message.assert_not_called()
         reply_text = listener._reply_to_chat.call_args[0][1]
-        assert "câu hỏi" in reply_text  # Hint message mentions "câu hỏi"
+        assert "Toán" in reply_text  # Contains lesson content
 
+    @pytest.mark.asyncio
+    async def test_handle_dailysum_calls_ai(self):
+        """_handle_dailysum calls chat_service.summarize_daily and posts the result."""
+        listener, mock_chat, _ = _make_listener()
+        mock_chat.summarize_daily = AsyncMock(return_value="AI generated summary")
 
-# ---------------------------------------------------------------------------
-# _on_debounced callback
-# ---------------------------------------------------------------------------
+        event = {
+            "text": "/dailysum",
+            "user_id": "users/123",
+            "user_name": "Student A",
+            "space_name": "spaces/abc",
+            "thread_name": "threads/t1",
+        }
+        await listener._handle_dailysum(event)
+
+        mock_chat.summarize_daily.assert_called_once_with(channel="gchat")
+        listener._reply_to_chat.assert_called_once()
+        listener._delete_message.assert_not_called()
+        reply_text = listener._reply_to_chat.call_args[0][1]
+        assert reply_text == "AI generated summary"
 
 
 class TestOnDebounced:
@@ -162,7 +271,7 @@ class TestOnDebounced:
 
     @pytest.mark.asyncio
     async def test_calls_chat_service_and_replies(self):
-        """The debounced callback gets AI answer and replies."""
+        """The debounced callback gets AI answer and sends a single reply (no typing indicator)."""
         listener, mock_chat, _ = _make_listener()
 
         await listener._on_debounced(
@@ -178,13 +287,13 @@ class TestOnDebounced:
             channel="gchat",
             user_name="Student A",
         )
-        # Should have been called twice: typing indicator + answer
-        assert listener._reply_to_chat.call_count == 2
+        # Single reply — no typing indicator
+        assert listener._reply_to_chat.call_count == 1
+        # No delete call — no typing indicator to remove
+        listener._delete_message.assert_not_called()
 
 
-# ---------------------------------------------------------------------------
-# start / stop lifecycle
-# ---------------------------------------------------------------------------
+# ===== start / stop lifecycle =====
 
 
 class TestLifecycle:
@@ -212,9 +321,7 @@ class TestLifecycle:
         assert not listener._running
 
 
-# ---------------------------------------------------------------------------
-# Singleton
-# ---------------------------------------------------------------------------
+# ===== Singleton =====
 
 
 class TestGChatSingleton:
