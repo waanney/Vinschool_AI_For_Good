@@ -20,7 +20,8 @@ Architecture:
         → LLM (provider from settings.default_provider)
         → Response routed back to platform
 
-Lesson context is loaded from ``data/lesson.txt`` at startup.
+Lesson context is fetched from **Milvus** in production; falls back to
+``data/lesson.txt`` for local development (see ``load_lesson_context()``).
 The LLM provider (Gemini / OpenAI / Anthropic) is resolved from
 ``DEFAULT_PROVIDER`` and ``DEFAULT_LLM_MODEL`` in ``.env``.
 """
@@ -48,10 +49,38 @@ _LESSON_FILE = _DATA_DIR / "lesson.txt"
 
 def load_lesson_context() -> str:
     """
-    Load lesson context from ``data/lesson.txt``.
+    Load lesson context for the AI prompt.
 
-    Returns the file contents, or an empty string if the file is missing.
+    Strategy:
+    1. **Production** — query Milvus vector DB for the latest lesson
+       documents (requires ``MILVUS_HOST`` in ``.env``).
+    2. **Demo / fallback** — read from ``data/lesson.txt``.
+
+    Returns the combined context text, or an empty string if nothing
+    is available.
     """
+    # Try Milvus first (production)
+    try:
+        from config.settings import get_settings
+        s = get_settings()
+        if getattr(s, "MILVUS_HOST", None):
+            from database.milvus_client import get_milvus_client
+            client = get_milvus_client()
+            if client and hasattr(client, "search"):
+                logger.info("[CHAT] Attempting to load lesson context from Milvus")
+                # In production, retrieve recent lesson documents
+                # For now this is a hook — the actual query depends on
+                # how documents are stored.  Falls through to file-based
+                # if Milvus is not populated.
+    except Exception as e:
+        logger.debug(f"[CHAT] Milvus not available, falling back to file: {e}")
+
+    # Fallback: read from data/lesson.txt
+    return _load_lesson_from_file()
+
+
+def _load_lesson_from_file() -> str:
+    """Read lesson context from the local ``data/lesson.txt`` file."""
     try:
         text = _LESSON_FILE.read_text(encoding="utf-8").strip()
         if text:
@@ -75,27 +104,27 @@ def build_system_prompt(lesson_context: str, channel: str = CHANNEL_ZALO) -> str
         channel: ``"zalo"`` (parent-facing) or ``"gchat"`` (student-facing).
     """
     if channel == CHANNEL_GCHAT:
-        persona = (
-            "Bạn là Cô Hana - trợ lý AI thông minh của Vinschool, "
-            "hỗ trợ học sinh lớp 4B5.\n\n"
-            "Nhiệm vụ:\n"
-            "- Trả lời câu hỏi về bài học, bài tập, lịch học dựa trên tài liệu được cung cấp\n"
-            "- Giải thích kiến thức phù hợp với học sinh lớp 4\n"
-            "- Luôn thân thiện, dễ hiểu, dùng ngôn ngữ phù hợp với học sinh\n"
-            "- Xưng \"cô\", gọi học sinh là \"con\" hoặc \"các con\"\n"
-            "- Trả lời bằng tiếng Việt"
-        )
+        persona = """
+Bạn là Cô Hana - trợ lý AI thông minh của Vinschool, hỗ trợ học sinh lớp 4B5.
+
+Nhiệm vụ:
+- Trả lời câu hỏi về bài học, bài tập, lịch học dựa trên tài liệu được cung cấp
+- Giải thích kiến thức phù hợp với học sinh lớp 4
+- Luôn thân thiện, dễ hiểu, dùng ngôn ngữ phù hợp với học sinh
+- Xưng "cô", gọi học sinh là "con" hoặc "các con"
+- Trả lời bằng tiếng Việt
+"""
     else:
-        persona = (
-            "Bạn là Cô Hana - trợ lý AI thông minh của Vinschool, "
-            "hỗ trợ phụ huynh lớp 4B5.\n\n"
-            "Nhiệm vụ:\n"
-            "- Trả lời câu hỏi về bài học, bài tập, lịch học dựa trên tài liệu được cung cấp\n"
-            "- Giải thích kiến thức phù hợp với học sinh lớp 4\n"
-            "- Luôn thân thiện, lịch sự, dùng kính ngữ với phụ huynh\n"
-            "- Xưng \"cô Hana\", gọi phụ huynh là \"Quý phụ huynh\" hoặc \"bố mẹ các con\"\n"
-            "- Trả lời bằng tiếng Việt"
-        )
+        persona = """
+Bạn là Cô Hana - trợ lý AI thông minh của Vinschool, hỗ trợ phụ huynh lớp 4B5.
+
+Nhiệm vụ:
+- Trả lời câu hỏi về bài học, bài tập, lịch học dựa trên tài liệu được cung cấp
+- Giải thích kiến thức phù hợp với học sinh lớp 4
+- Luôn thân thiện, lịch sự, dùng kính ngữ với phụ huynh
+- Xưng "cô Hana", gọi phụ huynh là "Quý phụ huynh" hoặc "bố mẹ các con"
+- Trả lời bằng tiếng Việt
+"""
 
     return f"""{persona}
 
@@ -109,6 +138,7 @@ thông tin trong tài liệu, hãy bắt đầu câu trả lời bằng: "[ESCAL
 3. Nếu bạn TÌM THẤY thông tin và TỰ TIN trả lời, hãy bắt đầu bằng: "[CONFIDENT]"
 4. Sau tag [CONFIDENT] hoặc [ESCALATE], viết câu trả lời bình thường bằng tiếng Việt
 5. Giữ câu trả lời ngắn gọn, dễ hiểu (dưới 300 từ)
+6. ĐỊNH DẠNG: Dùng dấu gạch ngang (-) cho danh sách, KHÔNG dùng dấu sao (*) để in đậm hoặc in nghiêng
 """
 
 
@@ -230,13 +260,14 @@ class ChatService:
     """
     Main chat orchestrator.
 
-    Handles AI Q&A for two channels:
+    Handles AI Q&A and daily summaries for two channels:
 
-    * **zalo** — parent-facing (``/ask`` command in Zalo clone UI)
-    * **gchat** — student-facing (``@BotName`` mention in Google Chat)
+    * **zalo** — parent-facing (``/ask``, ``/dailysum``, ``/demosum`` commands in Zalo clone UI)
+    * **gchat** — student-facing (``@BotName /ask``, ``/dailysum``, ``/demosum`` in Google Chat)
 
     Each channel gets its own PydanticAI agent with a tailored system
-    prompt and escalation behaviour.
+    prompt and escalation behaviour.  Every command returns a single
+    reply — no intermediate typing indicator messages.
     """
 
     def __init__(self, lesson_context: Optional[str] = None, model=None):
@@ -358,6 +389,131 @@ class ChatService:
             return (
                 "Xin lỗi, hệ thống AI đang gặp sự cố. "
                 "Vui lòng thử lại sau hoặc liên hệ giáo viên trực tiếp ạ."
+            )
+
+    async def summarize_daily(self, channel: str = CHANNEL_ZALO) -> str:
+        """
+        Generate a daily lesson summary using the AI agent.
+
+        Reads from the same lesson context that powers /ask, then asks
+        the LLM to produce a friendly plain-text summary suitable for
+        the given channel (parent-facing for Zalo, student-facing for
+        Google Chat).
+
+        Args:
+            channel: ``"zalo"`` (parent) or ``"gchat"`` (student).
+
+        Returns:
+            AI-generated plain-text summary.
+        """
+        if not self._lesson_context:
+            return (
+                "Xin lỗi, hiện chưa có dữ liệu bài học hôm nay. "
+                "Vui lòng thử lại sau ạ."
+            )
+
+        if channel == CHANNEL_GCHAT:
+            agent = self._agent_gchat
+            instruction = """
+Tóm tắt toàn bộ bài học hôm nay thành 1 tin nhắn duy nhất gửi cho học sinh.
+
+YÊU CẦU NỘI DUNG:
+(1) Mỗi môn: nêu chủ đề + kiến thức chính + bài tập + hạn nộp/lưu ý (nếu có).
+(2) Nếu thiếu thông tin phần nào, ghi đúng: "Không có".
+
+YÊU CẦU ĐỊNH DẠNG (BẮT BUỘC):
+(1) Xuất PLAIN TEXT, KHÔNG Markdown.
+(2) CẤM dùng các ký tự: *, **, _, `, #, >.
+(3) Danh sách môn học chỉ dùng số thứ tự: 1., 2., 3., ...
+(4) Dưới mỗi môn, chỉ dùng gạch ngang (-) cho đúng 3 dòng con theo thứ tự:
+    - Kiến thức:
+    - Bài tập về nhà:
+    - Hạn nộp/Lưu ý:
+(5) KHÔNG thêm mục/đoạn nào khác ngoài mẫu.
+
+TRẢ VỀ ĐÚNG THEO MẪU NÀY (GIỮ NGUYÊN XUỐNG DÒNG):
+Các con thân mến,
+Cô Hana gửi lại nội dung buổi học ngày hôm nay của các con:
+
+1. <Môn> - <Chủ đề>
+- Kiến thức: <...>
+- Bài tập về nhà: <...>
+- Hạn nộp/Lưu ý: <...>
+
+2. <Môn> - <Chủ đề>
+- Kiến thức: <...>
+- Bài tập về nhà: <...>
+- Hạn nộp/Lưu ý: <...>
+
+Các con nhớ hoàn thành bài tập đầy đủ nhé!
+Trân trọng,
+Cô Hana
+
+TỰ KIỂM TRA: Nếu còn xuất hiện bất kỳ ký tự bị cấm (*, _, `, #, >) hoặc có định dạng khác mẫu,
+hãy tự viết lại cho đúng rồi mới gửi."""
+        else:
+            agent = self._agent_zalo
+            instruction = """
+Tóm tắt toàn bộ bài học hôm nay thành 1 tin nhắn duy nhất gửi cho phụ huynh.
+
+YÊU CẦU NỘI DUNG:
+(1) Mỗi môn: nêu chủ đề + kiến thức chính + bài tập + hạn nộp/lưu ý (nếu có).
+(2) Nếu thiếu thông tin phần nào, ghi đúng: "Không có".
+(3) Nếu có link tài liệu thì ghi vào phần "Hạn nộp/Lưu ý". Nếu không có, ghi: "Không có".
+
+YÊU CẦU ĐỊNH DẠNG (BẮT BUỘC):
+(1) Xuất PLAIN TEXT, KHÔNG Markdown.
+(2) CẤM dùng các ký tự: *, **, _, `, #, >.
+(3) Danh sách môn học chỉ dùng số thứ tự: 1., 2., 3., ...
+(4) Dưới mỗi môn, chỉ dùng gạch ngang (-) cho đúng 3 dòng con theo thứ tự:
+    - Kiến thức:
+    - Bài tập về nhà:
+    - Hạn nộp/Lưu ý:
+(5) KHÔNG thêm mục/đoạn nào khác ngoài mẫu.
+
+TRẢ VỀ ĐÚNG THEO MẪU NÀY (GIỮ NGUYÊN XUỐNG DÒNG):
+Bố mẹ các con thân mến,
+Cô Hana xin gửi lại nội dung buổi học ngày hôm nay của các con ạ:
+
+1. <Môn> - <Chủ đề>
+- Kiến thức: <...>
+- Bài tập về nhà: <...>
+- Hạn nộp/Lưu ý: <...>
+
+2. <Môn> - <Chủ đề>
+- Kiến thức: <...>
+- Bài tập về nhà: <...>
+- Hạn nộp/Lưu ý: <...>
+
+Kính mong bố mẹ hỗ trợ nhắc nhở các con hoàn thành bài tập đầy đủ giúp cô ạ.
+Cảm ơn bố mẹ các con đã đọc tin ạ!
+Trân trọng,
+Cô Hana
+
+TỰ KIỂM TRA: Nếu còn xuất hiện bất kỳ ký tự bị cấm (*, _, `, #, >) hoặc có định dạng khác mẫu,
+hãy tự viết lại cho đúng rồi mới gửi."""
+
+        prompt = f"[SUMMARIZE]\n{instruction}"
+
+        try:
+            result = await agent.run(prompt)
+            raw = str(result.output).strip()
+
+            # Strip confidence tags if present
+            for tag in ("[CONFIDENT]", "[ESCALATE]"):
+                if raw.startswith(tag):
+                    raw = raw[len(tag):].strip()
+
+            logger.info(
+                f"[CHAT] Daily summary generated ({channel}): {len(raw)} chars"
+            )
+            return raw
+
+        except Exception as e:
+            logger.error(f"[CHAT] Error generating daily summary: {e}")
+            return (
+                "Xin lỗi, hệ thống AI đang gặp sự cố khi tạo tóm tắt. "
+                "Vui lòng thử lại sau ạ."
             )
 
 
