@@ -13,11 +13,26 @@ interface BackendMessage {
     is_ai: boolean;
 }
 
+// format a timestamp (ms) relative to now, similar to Zalo conversation list
+function formatRelativeTime(ts: number): string {
+    const diff = Date.now() - ts;
+    const sec = Math.floor(diff / 1000);
+    if (sec < 60) return `Few sec`;
+    const min = Math.floor(diff / 60000);
+    if (min < 60) return `${min}m`;
+    const hour = Math.floor(diff / 3600000);
+    if (hour < 24) return `${hour}h`;
+    const d = new Date(ts);
+    return d.toLocaleDateString();
+}
+
 interface Message {
     id: number | string;
     sender: string;
     content: React.ReactNode;
-    time: string;
+    text: string;            // raw text for previews
+    time: string;            // formatted hour:minute
+    ts: number;              // concrete timestamp for relative calculations
     isAI: boolean;
 }
 
@@ -47,6 +62,10 @@ export const ZaloDesktopChat: React.FC = () => {
     const scrollRef = useRef<HTMLDivElement>(null);
     const [messages, setMessages] = useState<Message[]>([]);
     const [loading, setLoading] = useState(true);
+    const [showList, setShowList] = useState(false); // mobile: whether conversation list is visible
+    const [activeChatId, setActiveChatId] = useState<string>('parent'); // which conversation is open (default selected)
+
+    const chatTitle = "Nhóm Zalo của phụ huynh"; // hardcoded for now; replace with real data later
     // fetchedIds tracks ALL IDs we have locally (backend + local-only user messages).
     const fetchedIds = useRef<Set<string>>(new Set());
     // backendFetchedIds tracks only IDs that actually came from the backend.
@@ -74,7 +93,9 @@ export const ZaloDesktopChat: React.FC = () => {
                         id: msg.id,
                         sender: msg.sender,
                         content: renderBackendMessage(msg),
+                        text: msg.text,
                         time: msg.time,
+                        ts: Date.now(),
                         isAI: msg.is_ai,
                     }))
                 );
@@ -91,7 +112,9 @@ export const ZaloDesktopChat: React.FC = () => {
                         id: msg.id,
                         sender: msg.sender,
                         content: renderBackendMessage(msg),
+                        text: msg.text,
                         time: msg.time,
+                        ts: Date.now(),
                         isAI: msg.is_ai,
                     });
                 }
@@ -120,7 +143,7 @@ export const ZaloDesktopChat: React.FC = () => {
         }
     }, [messages]);
 
-    const [isTyping, setIsTyping] = useState(false);
+    // const [isTyping, setIsTyping] = useState(false); // unused, kept for future typing indicator
 
     const handleSendMessage = async () => {
         if (!inputText.trim()) return;
@@ -137,13 +160,14 @@ export const ZaloDesktopChat: React.FC = () => {
                 id: tempId,
                 sender: "Phụ huynh Alex",
                 content: <p className="text-[14px] text-gray-800">{text}</p>,
-                time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                text,
+                time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
+                ts: Date.now(),
                 isAI: false
             };
             setMessages(prev => [...prev, userMsg]);
             fetchedIds.current.add(tempId);
 
-            setIsTyping(true);
             try {
                 const res = await fetch(`${API_BASE}/api/zalo/chat`, {
                     method: "POST",
@@ -175,7 +199,9 @@ export const ZaloDesktopChat: React.FC = () => {
                                     )}
                                 </div>
                             ),
-                            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                            text: data.reply,
+                            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
+                            ts: Date.now(),
                             isAI: true
                         };
                         setMessages(prev => [...prev, aiReply]);
@@ -187,12 +213,13 @@ export const ZaloDesktopChat: React.FC = () => {
                     id: Date.now() + 1,
                     sender: "Cô Hana (AI)",
                     content: <p className="text-[14px] text-red-600 italic">Không thể kết nối đến hệ thống AI. Vui lòng thử lại sau ạ.</p>,
-                    time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                    text: "Không thể kết nối đến hệ thống AI. Vui lòng thử lại sau ạ.",
+                    time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
+                    ts: Date.now(),
                     isAI: true
                 };
                 setMessages(prev => [...prev, errorReply]);
             } finally {
-                setIsTyping(false);
             }
             return;
         }
@@ -202,7 +229,9 @@ export const ZaloDesktopChat: React.FC = () => {
             id: Date.now(),
             sender: "Phụ huynh Alex",
             content: <p className="text-[14px] text-gray-800">{text}</p>,
-            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            text,
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
+            ts: Date.now(),
             isAI: false
         };
 
@@ -213,7 +242,8 @@ export const ZaloDesktopChat: React.FC = () => {
     return (
         <div className="flex w-full h-full bg-white font-sans text-[#081c36]" style={{ fontFamily: "'Segoe UI', Tahoma, sans-serif" }}>
             {/* 1. Sidebar trái */}
-            <div className="w-[64px] bg-[#0052cc] flex flex-col items-center py-6 gap-8 text-white shadow-inner flex-shrink-0">
+            {/* always show a thin icon column; keep fixed width */}
+            <div className="w-16 bg-[#0052cc] flex flex-col items-center py-6 gap-8 text-white shadow-inner shrink-0">
                 <div className="w-10 h-10 bg-[#00a1ff] rounded-full flex items-center justify-center font-bold text-sm border-2 border-white/20">HT</div>
                 <div className="text-2xl cursor-pointer hover:opacity-80 transition-opacity">💬</div>
                 <div className="text-xl cursor-pointer opacity-60 hover:opacity-100">👤</div>
@@ -221,31 +251,81 @@ export const ZaloDesktopChat: React.FC = () => {
             </div>
 
             {/* 2. Danh sách hội thoại */}
-            <div className="w-[280px] border-r border-[#dbdee1] bg-white flex flex-col flex-shrink-0">
+            {/* slide-in list on mobile, static on md+ */}
+            {/* backdrop layered below this when open */}
+            {showList && (
+                <div
+                    className="fixed inset-0 bg-black/30 z-10 md:hidden"
+                    onClick={() => setShowList(false)}
+                />
+            )}
+            <div
+                className={
+                    `fixed inset-y-0 left-0 z-20 w-[320px] bg-white border-r border-[#dbdee1] flex flex-col shrink-0 h-full overflow-y-auto no-scrollbar transform transition-transform duration-200 ease-in-out ` +
+                    `${showList ? 'translate-x-0' : '-translate-x-full'} md:relative md:translate-x-0 md:flex`
+                }
+            >
                 <div className="p-4 border-b border-[#dbdee1] font-bold text-[16px]">Tin nhắn</div>
-                <div className="bg-[#e5efff] p-3 flex items-center gap-3 border-l-[4px] border-[#0068ff] cursor-pointer">
-                    <div className="w-12 h-12 bg-[#0068ff] rounded-full flex items-center justify-center text-white text-[10px] font-bold shadow-sm">AI</div>
-                    <div className="flex flex-col overflow-hidden">
-                        <span className="font-bold text-[14px] truncate">Nhóm Zalo của phụ huynh</span>
-                        <span className="text-[12px] text-[#0068ff] truncate font-medium italic">AI đang trả lời...</span>
+                <div
+                    className={
+                        `p-3 flex items-center gap-3 cursor-pointer transition-colors ` +
+                        (activeChatId === 'parent'
+                            ? 'bg-[#e5efff] border-[#0068ff]'
+                            : 'hover:bg-[#e5efff] border-l-4 border-transparent hover:border-[#0068ff]')
+                    }
+                    onClick={() => {
+                        setActiveChatId('parent');
+                        setShowList(false);
+                    }}
+                >
+                    <div className="w-12 h-12 bg-[#0068ff] rounded-full shrink-0 flex items-center justify-center text-white text-[14px] font-bold shadow-sm">AI</div>
+                    <div className="flex flex-col overflow-hidden flex-1">
+                        <div className="flex justify-between items-center">
+                            <span className="font-medium text-[16px] truncate">{chatTitle}</span>
+                            <span className="text-[12px] text-gray-500 shrink-0 ml-2">
+                                {messages.length > 0 ? formatRelativeTime(messages[messages.length-1].ts) : ''}
+                            </span>
+                        </div>
+                        <span className="text-[15px] text-[#9d9d9d] overflow-hidden whitespace-nowrap truncate">
+                            {(() => {
+                                if (messages.length === 0) return '';
+                                const last = messages[messages.length - 1];
+                                let prefix = '';
+                                if (last.isAI) {
+                                    prefix = last.sender ? `${last.sender}: ` : '';
+                                } else {
+                                    prefix = 'Bạn: ';
+                                }
+                                return prefix + last.text;
+                            })()}
+                        </span>
                     </div>
                 </div>
             </div>
 
             {/* 3. Vùng nội dung chat chính */}
             <div className="flex-1 flex flex-col bg-[#f4f7f9] overflow-hidden">
-                {/* Header khung chat */}
-                <div className="p-3 bg-white border-b border-[#dbdee1] flex justify-between items-center px-5 flex-shrink-0">
-                    <div className="flex flex-col">
-                        <span className="font-bold text-[16px]">Nhóm Zalo của phụ huynh (Alex - 4B5)</span>
-                        <span className="text-[11px] text-gray-500 font-medium italic">15 thành viên</span>
+                {/* Header */}
+                <div className="p-3 bg-white border-b border-[#dbdee1] flex justify-between items-center px-5 shrink-0">
+                    <div className="flex items-center gap-2">
+                        {/* show back/hamburger on small screens */}
+                        <button
+                            className="md:hidden text-xl mr-2"
+                            onClick={() => setShowList(prev => !prev)}
+                        >
+                            {showList ? '←' : '☰'}
+                        </button>
+                        <div className="w-12 h-12 bg-[#0068ff] rounded-full shrink-0 flex items-center justify-center text-white text-[14px] font-bold shadow-sm">AI</div>
+                        <div className="flex flex-col">
+                            <span className="font-medium text-[18px]">Nhóm Zalo của phụ huynh</span>
+                            <span className="text-[14px] text-gray-500">15 thành viên</span>
+                        </div>
                     </div>
-                    <div className="flex gap-4 text-gray-400 font-medium text-sm italic">📅 09/02/2026</div>
                 </div>
 
                 {/* Vùng tin nhắn cuộn */}
-                <div ref={scrollRef} className="flex-1 p-8 overflow-y-auto flex flex-col gap-6 no-scrollbar bg-[#f4f7f9]">
-                    <div className="text-center"><span className="text-[11px] text-gray-400 font-bold uppercase tracking-widest opacity-60">--- Hôm nay ---</span></div>
+                <div ref={scrollRef} className="flex-1 min-h-0 p-8 overflow-y-auto flex flex-col gap-6 no-scrollbar bg-[#f4f7f9]">
+                    <div className="text-center my-2"><span className="text-[10px] bg-gray-400/60 px-7 py-1 rounded-xl text-white uppercase">Hôm nay</span></div>
 
                     {loading && messages.length === 0 && (
                         <div className="text-center text-gray-400 text-sm mt-8">Đang tải tin nhắn...</div>
@@ -258,8 +338,8 @@ export const ZaloDesktopChat: React.FC = () => {
                     )}
 
                     {messages.map((msg) => (
-                        <div key={msg.id} className={`flex gap-3 ${msg.isAI ? 'self-start' : 'self-end flex-row-reverse'} max-w-[85%]`}>
-                            <div className={`w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center text-white text-[10px] font-bold mt-1 ${msg.isAI ? 'bg-[#0068ff]' : 'bg-green-600'}`}>
+                        <div key={msg.id} className={`flex gap-3 ${msg.isAI ? 'self-start' : 'self-end flex-row-reverse'} max-w-[85%] md:max-w-[60%]`}>
+                            <div className={`w-8 h-8 rounded-full shrink-0 flex items-center justify-center text-white text-[10px] font-bold mt-1 ${msg.isAI ? 'bg-[#0068ff]' : 'bg-green-600'}`}>
                                 {msg.isAI ? 'AI' : 'PH'}
                             </div>
                             <div className={`p-4 rounded-xl shadow-[0_1px_2px_rgba(0,0,0,0.1)] border ${msg.isAI ? 'bg-white border-[#dbdee1]' : 'bg-[#e2f2ff] border-[#0068ff]/20'}`}>
@@ -267,7 +347,7 @@ export const ZaloDesktopChat: React.FC = () => {
                                 <div className="leading-relaxed">
                                     {msg.content}
                                 </div>
-                                <div className="text-[10px] text-gray-400 text-right mt-2 font-bold opacity-70 italic">{msg.time}</div>
+                                <div className="text-[10px] text-gray-400 text-left mt-2 font-bold opacity-70">{msg.time}</div>
                             </div>
                         </div>
                     ))}
@@ -275,8 +355,8 @@ export const ZaloDesktopChat: React.FC = () => {
 
                 </div>
 
-                {/* Footer soạn thảo chuẩn Desktop */}
-                <div className="h-[140px] bg-white border-t border-[#dbdee1] flex flex-col p-3 flex-shrink-0">
+                {/* Footer */}
+                <div className="h-auto md:h-35 bg-white border-t border-[#dbdee1] flex flex-col p-3 shrink-0">
                     <div className="flex gap-4 mb-2 text-gray-500 text-lg px-2">
                         <span className="cursor-pointer hover:text-blue-600">☺</span>
                         <span className="cursor-pointer hover:text-blue-600">🖼️</span>
