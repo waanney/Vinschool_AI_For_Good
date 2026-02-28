@@ -85,6 +85,7 @@ class HomeworkGradingWorkflow:
                 assignment=assignment,
                 rubric=rubric,
                 submission_file_path=submission_file_path,
+                student_name=student_name,
             )
 
             # Update assignment with results
