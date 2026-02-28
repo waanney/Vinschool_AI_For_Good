@@ -18,6 +18,7 @@ interface Message {
     id: number | string;
     sender: string;
     content: React.ReactNode;
+    text?: string;          // raw text for preview or other purposes
     time: string;
     isAI: boolean;
 }
@@ -71,6 +72,7 @@ export const ZaloMobileChat: React.FC = () => {
                         id: msg.id,
                         sender: msg.sender,
                         content: renderBackendMessage(msg),
+                        text: msg.text,
                         time: msg.time,
                         isAI: msg.is_ai,
                     }))
@@ -88,6 +90,7 @@ export const ZaloMobileChat: React.FC = () => {
                         id: msg.id,
                         sender: msg.sender,
                         content: renderBackendMessage(msg),
+                        text: msg.text,
                         time: msg.time,
                         isAI: msg.is_ai,
                     });
@@ -118,7 +121,7 @@ export const ZaloMobileChat: React.FC = () => {
         }
     }, [messages]);
 
-    const [isTyping, setIsTyping] = useState(false);
+    // const [isTyping, setIsTyping] = useState(false); // unused for now
 
     const handleSendMessage = async () => {
         if (!inputText.trim()) return;
@@ -135,13 +138,12 @@ export const ZaloMobileChat: React.FC = () => {
                 id: tempId,
                 sender: "Phụ huynh",
                 content: <p className="text-[13.5px]">{text}</p>,
-                time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
                 isAI: false
             };
             setMessages(prev => [...prev, userMsg]);
             fetchedIds.current.add(tempId);
 
-            setIsTyping(true);
             try {
                 const res = await fetch(`${API_BASE}/api/zalo/chat`, {
                     method: "POST",
@@ -173,7 +175,8 @@ export const ZaloMobileChat: React.FC = () => {
                                     )}
                                 </div>
                             ),
-                            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                            text: data.reply,
+                            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
                             isAI: true
                         };
                         setMessages(prev => [...prev, aiReply]);
@@ -185,13 +188,13 @@ export const ZaloMobileChat: React.FC = () => {
                     id: Date.now() + 1,
                     sender: "Cô Hana (AI)",
                     content: <p className="text-[13.5px] text-red-600 italic">Không thể kết nối đến AI. Thử lại sau ạ.</p>,
-                    time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                    text: "Không thể kết nối đến AI. Thử lại sau ạ.",
+                    time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
                     isAI: true
                 };
                 setMessages(prev => [...prev, errorReply]);
             } finally {
-                setIsTyping(false);
-            }
+                }
             return;
         }
 
@@ -200,7 +203,8 @@ export const ZaloMobileChat: React.FC = () => {
             id: Date.now(),
             sender: "Phụ huynh",
             content: <p className="text-[13.5px]">{text}</p>,
-            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            text,
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
             isAI: false
         };
 
@@ -211,7 +215,7 @@ export const ZaloMobileChat: React.FC = () => {
     return (
         <div className="flex flex-col h-full bg-[#ebeef5]" style={{ fontFamily: "Arial, sans-serif" }}>
             {/* Header Zalo Mobile */}
-            <div className="bg-[#0068ff] pt-10 pb-3 px-4 text-white flex items-center gap-3 flex-shrink-0">
+            <div className="bg-[#0068ff] pt-10 pb-3 px-4 text-white flex items-center gap-3 shrink-0">
                 <div className="w-10 h-10 bg-blue-200 rounded-full flex items-center justify-center text-[#0068ff] font-bold shadow-sm">AI</div>
                 <div className="flex flex-col">
                     <span className="font-bold text-[15px]">Nhóm Zalo của phụ huynh</span>
