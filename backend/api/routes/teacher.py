@@ -49,7 +49,7 @@ async def upload_document(
 ):
     """
     Upload educational content for processing.
-    
+
     This endpoint:
     1. Saves the uploaded file
     2. Processes and embeds content
@@ -60,24 +60,24 @@ async def upload_document(
         # Validate file type
         file_extension = Path(file.filename).suffix.lower()
         allowed_extensions = [".pdf", ".docx", ".pptx", ".jpg", ".jpeg", ".png"]
-        
+
         if file_extension not in allowed_extensions:
             raise HTTPException(
                 status_code=400,
                 detail=f"Unsupported file type. Allowed: {', '.join(allowed_extensions)}"
             )
-        
+
         # Save uploaded file
         upload_dir = Path("uploads") / teacher_id
         upload_dir.mkdir(parents=True, exist_ok=True)
         file_path = upload_dir / file.filename
-        
+
         async with aiofiles.open(file_path, 'wb') as f:
             content = await file.read()
             await f.write(content)
-        
+
         logger.info(f"Saved uploaded file: {file_path}")
-        
+
         # Create document entity
         document = Document(
             title=title,
@@ -90,7 +90,7 @@ async def upload_document(
             subject=subject,
             grade=grade,
         )
-        
+
         # Process through workflow
         workflow = DailyContentWorkflow()
         result = await workflow.process_daily_upload(
@@ -99,13 +99,13 @@ async def upload_document(
             generate_summary=generate_summary,
             generate_exercises=generate_exercises,
         )
-        
+
         if not result["success"]:
             raise HTTPException(
                 status_code=500,
                 detail=f"Processing failed: {result.get('errors', [])}"
             )
-        
+
         return UploadResponse(
             success=True,
             document_id=str(document.id),
@@ -113,7 +113,7 @@ async def upload_document(
             summary=result.get("summary"),
             exercises=result.get("exercises", []),
         )
-        
+
     except Exception as e:
         logger.error(f"Upload failed: {e}")
         # Clean up file if it was saved
@@ -142,3 +142,69 @@ async def get_escalated_questions(teacher_id: str):
         "questions": [],
         "message": "Escalated question retrieval not yet implemented",
     }
+
+
+# ===== Submission endpoints (for LMS teacher dashboard) =====
+
+
+class SubmissionResponse(BaseModel):
+    """A single graded submission."""
+    id: str
+    student_id: str
+    student_name: str
+    assignment_title: str
+    subject: str
+    score: float
+    max_score: float
+    feedback: str
+    attachment_paths: list[str]
+    details: dict
+    graded_at: str
+    is_viewed: bool
+
+
+class SubmissionsListResponse(BaseModel):
+    """List of submissions with unviewed count for notification badge."""
+    submissions: list[SubmissionResponse]
+    count: int
+    unviewed_count: int
+
+
+@router.get("/submissions", response_model=SubmissionsListResponse)
+async def get_submissions():
+    """
+    Get all graded submissions for the teacher LMS dashboard.
+
+    Returns submissions sorted by graded_at descending (newest first),
+    along with unviewed_count for the notification badge.
+    """
+    from services.chat.submission_store import (
+        get_submissions,
+        get_unviewed_count,
+    )
+
+    submissions = get_submissions()
+    return SubmissionsListResponse(
+        submissions=[SubmissionResponse(**s) for s in submissions],
+        count=len(submissions),
+        unviewed_count=get_unviewed_count(),
+    )
+
+
+@router.post("/submissions/{submission_id}/view")
+async def mark_submission_viewed(submission_id: str):
+    """
+    Mark a submission as viewed by the teacher.
+
+    This corresponds to the teacher clicking on a submission row
+    in the LMS UI (grey → white background transition).
+    """
+    from services.chat.submission_store import mark_viewed
+
+    found = mark_viewed(submission_id)
+    if not found:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Submission {submission_id} not found",
+        )
+    return {"success": True, "submission_id": submission_id}

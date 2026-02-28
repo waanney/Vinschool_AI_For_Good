@@ -1,7 +1,24 @@
 'use client';
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import UploadButton from "./UploadButton";
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
+interface Submission {
+  id: string;
+  student_id: string;
+  student_name: string;
+  assignment_title: string;
+  subject: string;
+  score: number;
+  max_score: number;
+  feedback: string;
+  attachment_paths: string[];
+  details: Record<string, any>;
+  graded_at: string;
+  is_viewed: boolean;
+}
 
 export default function TeacherHomeworkTable({ userName }: { userName: string }) {
   // --- QUẢN LÝ ĐIỀU HƯỚNG ---
@@ -33,6 +50,42 @@ export default function TeacherHomeworkTable({ userName }: { userName: string })
   const [selectedStudent, setSelectedStudent] = useState<any>(null);
   const [viewedStudentIds, setViewedStudentIds] = useState<number[]>([4]);
   const [activeHW, setActiveHW] = useState<any>(null);
+
+  // --- API SUBMISSIONS (from /grade Google Chat command) ---
+  const [apiSubmissions, setApiSubmissions] = useState<Submission[]>([]);
+  const [unviewedCount, setUnviewedCount] = useState(0);
+  const [selectedSubmission, setSelectedSubmission] = useState<Submission | null>(null);
+
+  // Poll backend for graded submissions every 5 seconds
+  const fetchSubmissions = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/teacher/submissions`);
+      if (res.ok) {
+        const data = await res.json();
+        setApiSubmissions(data.submissions || []);
+        setUnviewedCount(data.unviewed_count || 0);
+      }
+    } catch {
+      // Backend may not be running — silently ignore
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchSubmissions();
+    const interval = setInterval(fetchSubmissions, 5000);
+    return () => clearInterval(interval);
+  }, [fetchSubmissions]);
+
+  const markSubmissionViewed = async (submissionId: string) => {
+    try {
+      await fetch(`${API_BASE}/api/teacher/submissions/${submissionId}/view`, {
+        method: "POST",
+      });
+      fetchSubmissions(); // Refresh after marking
+    } catch {
+      // Silently ignore
+    }
+  };
 
   useEffect(() => {
     const defaultHW = [
@@ -93,7 +146,7 @@ export default function TeacherHomeworkTable({ userName }: { userName: string })
           Các học phần
         </span>
         <span onClick={() => { setActiveMainTab('homework'); setView('list'); }} className={`px-4 py-1.5 rounded-full cursor-pointer relative transition-all ${activeMainTab === 'homework' && view !== 'images' ? 'bg-[#4f46e5] text-white shadow-md' : 'hover:bg-slate-100'}`}>
-          Bài tập học sinh <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] w-4 h-4 flex items-center justify-center rounded-full border border-white">2</span>
+          Bài tập học sinh {(unviewedCount + 2) > 0 && <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] w-4 h-4 flex items-center justify-center rounded-full border border-white">{unviewedCount + 2}</span>}
         </span>
         <span onClick={() => { setActiveMainTab('progress'); setReportView('select'); setProcessView('select'); setView('list'); }} className={`px-4 py-1.5 rounded-full cursor-pointer transition-all ${activeMainTab === 'progress' && view !== 'images' ? 'bg-[#4f46e5] text-white shadow-md' : 'hover:bg-slate-100'}`}>
           Báo cáo tiến bộ
@@ -165,12 +218,33 @@ export default function TeacherHomeworkTable({ userName }: { userName: string })
               <>
                 <UploadButton />
                 <div className="flex space-x-8 mb-6 mt-6 text-sm font-medium">
-                  {['all', 'mandatory', 'reference'].map((t) => (<label key={t} className="flex items-center space-x-2 cursor-pointer"><input type="radio" checked={filter === t} onChange={() => setFilter(t)} className="accent-[#4f46e5]"/><span>{t==='all'?'Tất cả':t==='mandatory'?'Bài tập bắt buộc':'Bài tập tham khảo'}</span></label>))}
+                  {['all', 'mandatory', 'reference'].map((t) => (<label key={t} className="flex items-center space-x-2 cursor-pointer"><input type="radio" checked={filter === t} onChange={() => setFilter(t)} className="accent-[#4f46e5]" /><span>{t === 'all' ? 'Tất cả' : t === 'mandatory' ? 'Bài tập bắt buộc' : 'Bài tập tham khảo'}</span></label>))}
                 </div>
                 <div className="border border-slate-200 rounded-xl overflow-hidden shadow-sm"><table className="w-full text-left text-sm"><thead className="bg-[#e0f2fe] text-slate-700 font-bold text-center"><tr><th className="p-4 border-b">Unit</th><th className="p-4 border-b">Bài Tập</th><th className="p-4 border-b">Dạng bài tập</th><th className="p-4 border-b">Deadline</th><th className="p-4 border-b">Chi tiết</th><th className="p-4 border-b">Tình trạng nộp bài</th></tr></thead><tbody>{homeworkList.filter(it => filter === 'all' || it.typeKey === filter).map((item) => (<tr key={item.id} className="border-b border-slate-100 text-center hover:bg-slate-50 transition-colors"><td className="p-4 font-bold border-r border-slate-100 w-24 text-slate-800">{item.unit}</td><td className="p-4 font-medium text-blue-900">{item.title}</td><td className={`p-4 font-bold ${item.color}`}>{item.type}</td><td className="p-4 text-slate-500">{item.deadline}</td><td className="p-4 relative"><button onClick={() => { setActiveHW(item); setView('detail'); }} className="text-blue-600 underline font-medium hover:text-blue-800 cursor-pointer">Bấm vào để xem</button><span className="absolute top-2 right-4 bg-red-500 text-white text-[9px] w-4 h-4 flex items-center justify-center rounded-full shadow-sm">3</span></td><td className="p-4 text-slate-500 font-bold">4/40 Học sinh</td></tr>))}</tbody></table></div>
               </>
             ) : (
-              <div className="animate-in fade-in duration-500"><button onClick={() => setView('list')} className="mb-4 text-sm text-blue-600 font-medium hover:underline flex items-center">← Quay lại danh sách bài tập</button><h2 className="text-[13px] font-bold text-slate-800 mb-6 leading-relaxed">{activeHW?.fullTitle}</h2><div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm"><table className="w-full text-left text-[12px]"><thead className="bg-[#e0f2fe] text-gray-700 font-bold text-center"><tr><th className="p-3 border-b border-r border-slate-100 w-12">STT</th><th className="p-3 border-b border-r border-slate-100 w-40">Học sinh</th><th className="p-3 border-b border-r border-slate-100 w-28">Thời gian nộp bài</th><th className="p-3 border-b border-r border-slate-100">Nhận xét</th><th className="p-3 border-b border-r border-slate-100 w-16 text-center">Chi tiết</th><th className="p-3 border-b border-slate-100 w-56">Bài tập được đề xuất thêm</th></tr></thead><tbody>{students.map((s) => (<tr key={s.stt} onClick={() => !viewedStudentIds.includes(s.stt) && setViewedStudentIds([...viewedStudentIds, s.stt])} className={`border-b border-slate-100 cursor-pointer transition-colors duration-300 ${viewedStudentIds.includes(s.stt) ? 'bg-white' : 'bg-[#f3f4f6]'}`}><td className="p-3 text-center font-bold border-r border-slate-100 text-slate-800">{s.stt}</td><td className="p-3 font-bold border-r border-slate-100 text-slate-700">{s.name}</td><td className="p-3 text-center border-r border-slate-100 text-slate-500 font-medium">{s.stt === 1 ? 'Jan 4, 2026' : 'Jan 8, 2026'}</td><td className="p-3 border-r italic text-slate-600 leading-relaxed">{s.comment}</td><td className="p-3 border-r border-slate-100 text-center"><div onClick={(e) => { e.stopPropagation(); openImageGallery(s); }} className="w-8 h-10 mx-auto border border-slate-200 bg-white shadow-sm overflow-hidden cursor-pointer hover:ring-2 hover:ring-blue-400 transition-all"><img src={s.images[0]} className="w-full h-full object-cover" /></div></td><td className="p-3 font-medium text-slate-700">{s.stt === 4 ? "Blook" : activeHW?.fullTitle.replace(".docx", "")}</td></tr>))}</tbody></table></div></div>
+              <>
+                <div className="animate-in fade-in duration-500"><button onClick={() => setView('list')} className="mb-4 text-sm text-blue-600 font-medium hover:underline flex items-center">← Quay lại danh sách bài tập</button><h2 className="text-[13px] font-bold text-slate-800 mb-6 leading-relaxed">{activeHW?.fullTitle}</h2><div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm"><table className="w-full text-left text-[12px]"><thead className="bg-[#e0f2fe] text-gray-700 font-bold text-center"><tr><th className="p-3 border-b border-r border-slate-100 w-12">STT</th><th className="p-3 border-b border-r border-slate-100 w-40">Học sinh</th><th className="p-3 border-b border-r border-slate-100 w-20">Điểm</th><th className="p-3 border-b border-r border-slate-100 w-28">Thời gian nộp bài</th><th className="p-3 border-b border-r border-slate-100">Nhận xét</th><th className="p-3 border-b border-r border-slate-100 w-16 text-center">Chi tiết</th><th className="p-3 border-b border-slate-100 w-56">Bài tập được đề xuất thêm</th></tr></thead><tbody>{students.map((s) => (<tr key={s.stt} onClick={() => !viewedStudentIds.includes(s.stt) && setViewedStudentIds([...viewedStudentIds, s.stt])} className={`border-b border-slate-100 cursor-pointer transition-colors duration-300 ${viewedStudentIds.includes(s.stt) ? 'bg-white' : 'bg-[#f3f4f6]'}`}><td className="p-3 text-center font-bold border-r border-slate-100 text-slate-800">{s.stt}</td><td className="p-3 font-bold border-r border-slate-100 text-slate-700">{s.name}</td><td className="p-3 text-center border-r border-slate-100 font-bold text-slate-700">-</td><td className="p-3 text-center border-r border-slate-100 text-slate-500 font-medium">{s.stt === 1 ? 'Jan 4, 2026' : 'Jan 8, 2026'}</td><td className="p-3 border-r italic text-slate-600 leading-relaxed">{s.comment}</td><td className="p-3 border-r border-slate-100 text-center"><div onClick={(e) => { e.stopPropagation(); openImageGallery(s); }} className="w-8 h-10 mx-auto border border-slate-200 bg-white shadow-sm overflow-hidden cursor-pointer hover:ring-2 hover:ring-blue-400 transition-all"><img src={s.images[0]} className="w-full h-full object-cover" /></div></td><td className="p-3 font-medium text-slate-700">{s.stt === 4 ? "Blook" : activeHW?.fullTitle.replace(".docx", "")}</td></tr>))}{/* === AI-graded submissions from /grade Google Chat command === */}{apiSubmissions.map((sub, idx) => (<tr key={sub.id} onClick={() => { if (!sub.is_viewed) markSubmissionViewed(sub.id); }} className={`border-b border-slate-100 cursor-pointer transition-colors duration-300 ${sub.is_viewed ? 'bg-white' : 'bg-[#fef3c7] animate-pulse'}`}><td className="p-3 text-center font-bold border-r border-slate-100 text-slate-800">{students.length + idx + 1}</td><td className="p-3 font-bold border-r border-slate-100 text-slate-700">{sub.student_name}</td><td className={`p-3 text-center border-r border-slate-100 font-bold ${sub.score < 5 ? 'text-red-500' : sub.score >= 7 ? 'text-green-600' : 'text-orange-500'}`}>{sub.score.toFixed(1)}/{sub.max_score.toFixed(1)}</td><td className="p-3 text-center border-r border-slate-100 text-slate-500 font-medium">{new Date(sub.graded_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</td><td className="p-3 border-r italic text-slate-600 leading-relaxed">{sub.feedback || '-'}</td><td className="p-3 border-r border-slate-100 text-center"><button onClick={(e) => { e.stopPropagation(); setSelectedSubmission(sub); }} className="text-blue-600 underline text-[11px] font-medium hover:text-blue-800">Xem bài</button></td><td className="p-3 font-medium text-slate-700">{'-'}</td></tr>))}</tbody></table></div></div>
+                {/* === Submission Detail Modal === */}
+                {selectedSubmission && (
+                  <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setSelectedSubmission(null)}>
+                    <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex justify-between items-center mb-4">
+                        <h3 className="text-lg font-bold text-slate-800">Chi tiết bài nộp - {selectedSubmission.student_name}</h3>
+                        <button onClick={() => setSelectedSubmission(null)} className="text-slate-400 hover:text-slate-600 text-2xl font-light">&times;</button>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3 mb-4 text-sm">
+                        <div className="bg-slate-50 rounded-lg p-3"><span className="text-slate-500">Điểm:</span> <span className={`font-bold ${selectedSubmission.score < 5 ? 'text-red-500' : selectedSubmission.score >= 7 ? 'text-green-600' : 'text-orange-500'}`}>{selectedSubmission.score.toFixed(1)}/{selectedSubmission.max_score.toFixed(1)}</span></div>
+                        <div className="bg-slate-50 rounded-lg p-3"><span className="text-slate-500">Thời gian:</span> <span className="font-medium">{new Date(selectedSubmission.graded_at).toLocaleString('vi-VN')}</span></div>
+                      </div>
+                      {selectedSubmission.feedback && <div className="mb-4"><h4 className="text-sm font-bold text-slate-700 mb-2">Nhận xét:</h4><p className="text-sm text-slate-600 bg-blue-50 rounded-lg p-3 leading-relaxed">{selectedSubmission.feedback}</p></div>}
+                      {(selectedSubmission.details?.strengths || []).length > 0 && <div className="mb-4"><h4 className="text-sm font-bold text-green-700 mb-2">Điểm mạnh:</h4><ul className="text-sm text-slate-600 space-y-1">{selectedSubmission.details.strengths.map((s: string, i: number) => <li key={i} className="bg-green-50 rounded-lg px-3 py-2">✓ {s}</li>)}</ul></div>}
+                      {(selectedSubmission.details?.improvements || []).length > 0 && <div className="mb-4"><h4 className="text-sm font-bold text-orange-600 mb-2">Cần cải thiện:</h4><ul className="text-sm text-slate-600 space-y-1">{selectedSubmission.details.improvements.map((s: string, i: number) => <li key={i} className="bg-orange-50 rounded-lg px-3 py-2">→ {s}</li>)}</ul></div>}
+                      {selectedSubmission.attachment_paths && selectedSubmission.attachment_paths.length > 0 && <div><h4 className="text-sm font-bold text-slate-700 mb-2">Ảnh bài tập đã nộp:</h4><div className="grid grid-cols-2 gap-3">{selectedSubmission.attachment_paths.map((p: string, i: number) => <div key={i} className="border rounded-lg overflow-hidden bg-slate-50 p-2"><p className="text-xs text-slate-500 truncate mb-1">{p.split(/[/\\]/).pop()}</p></div>)}</div></div>}
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </div>
         ) : (
@@ -179,7 +253,7 @@ export default function TeacherHomeworkTable({ userName }: { userName: string })
               <button onClick={() => setActiveSubTab('unit')} className={`pb-2 font-bold text-sm border-b-2 transition-all ${activeSubTab === 'unit' ? 'border-[#4f46e5] text-[#4f46e5]' : 'border-transparent text-slate-400'}`}>Báo cáo Unit</button>
               <button onClick={() => setActiveSubTab('process')} className={`pb-2 font-bold text-sm border-b-2 transition-all ${activeSubTab === 'process' ? 'border-[#4f46e5] text-[#4f46e5]' : 'border-transparent text-slate-400'}`}>Báo cáo tiến trình</button>
             </div>
-            
+
             {activeSubTab === 'unit' ? (
                reportView === 'select' ? (
                 <div className="p-10 flex space-x-6 items-end animate-in fade-in duration-500">

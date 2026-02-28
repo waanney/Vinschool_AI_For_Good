@@ -26,8 +26,7 @@ from utils.logger import logger
 # ===== Demo lesson content =====
 
 # Raw lesson data — used internally and as AI context fallback
-DEMO_LESSON_CONTENT = """
-TOÁN — Phân số (Tuần 12)
+DEMO_LESSON_CONTENT = """TOÁN — Phân số (Tuần 12)
 - Cộng phân số khác mẫu: quy đồng mẫu số rồi cộng tử số
   Ví dụ: 1/3 + 1/4 = 4/12 + 3/12 = 7/12
 - Trừ phân số khác mẫu: quy đồng rồi trừ tử số
@@ -43,8 +42,7 @@ TIẾNG ANH — Conditional Type 1
 - BTVN: Viết 5 câu điều kiện loại 1 về kế hoạch của em"""
 
 # Demo summary for PARENTS (Zalo) — formal tone
-DEMO_LESSON_CONTENT_PARENTS = """
-Bố mẹ các con thân mến,
+DEMO_LESSON_CONTENT_PARENTS = """Bố mẹ các con thân mến,
 Cô Hana xin gửi lại nội dung buổi học ngày hôm nay của các con ạ:
 
 1. TOÁN - Cộng, trừ phân số khác mẫu số
@@ -66,8 +64,7 @@ Kính mong bố mẹ hỗ trợ nhắc nhở các con hoàn thành bài tập đ
 Cảm ơn bố mẹ các con đã đọc tin ạ!"""
 
 # Demo summary for STUDENTS (Google Chat) — friendly tone
-DEMO_LESSON_CONTENT_STUDENTS = """
-Các con thân mến,
+DEMO_LESSON_CONTENT_STUDENTS = """Các con thân mến,
 Cô Hana gửi lại nội dung buổi học ngày hôm nay của các con:
 
 1. TOÁN - Cộng, trừ phân số khác mẫu số

@@ -3,11 +3,12 @@ Google Chat Pub/Sub listener.
 
 Subscribes to a Google Cloud Pub/Sub topic where Google Chat publishes
 events when users @-mention the bot in a space.  The bot recognises
-three slash commands embedded in the message text:
+four slash commands embedded in the message text:
 
 - ``/ask <question>`` — AI Q&A (student-facing persona, debounced)
-- ``/dailysum``        — AI-generated daily lesson summary
-- ``/demosum``         — hardcoded demo summary (no API cost)
+- ``/grade``          — Grade submitted homework images via AI
+- ``/dailysum``       — AI-generated daily lesson summary
+- ``/demosum``        — hardcoded demo summary (no API cost)
 
 Any other message is silently ignored so the bot does not respond to
 every conversation in the shared space.
@@ -28,7 +29,10 @@ See backend/README.md for detailed setup instructions.
 
 import asyncio
 import json
+import os
+import tempfile
 from typing import Optional
+from uuid import uuid4, UUID
 
 import httpx
 
@@ -41,8 +45,9 @@ class GoogleChatListener:
     Listens for Google Chat messages via Pub/Sub and replies via Chat REST API.
 
     This is a pull-based subscriber: it periodically pulls messages from
-    a Pub/Sub subscription, processes slash commands (/ask, /dailysum,
-    /demosum), and replies inline.  All other messages are silently ignored.
+    a Pub/Sub subscription, processes slash commands (/ask, /grade,
+    /dailysum, /demosum), and replies inline.  All other messages are
+    silently ignored.
 
     Messages sent via /ask are debounced per-user (default 3s) so rapid
     follow-up messages are concatenated into a single AI request.
@@ -302,6 +307,7 @@ class GoogleChatListener:
                 "user_name": user.get("displayName", "Unknown User"),
                 "space_name": space.get("name", ""),
                 "thread_name": thread.get("name"),
+                "attachments": message.get("attachment", []),
             }
 
         except Exception as e:
@@ -338,8 +344,9 @@ class GoogleChatListener:
         """
         Process a parsed Google Chat event.
 
-        Responds to three commands:
+        Responds to four commands:
         - /ask <question>  — AI Q&A (debounced, student persona)
+        - /grade           — Grade submitted homework images
         - /dailysum        — AI-generated lesson summary for today
         - /demosum         — hardcoded demo summary (no AI cost)
 
@@ -354,6 +361,19 @@ class GoogleChatListener:
         if not text:
             return
 
+        # /help — show available commands
+        if text.lower().startswith("/help"):
+            help_text = (
+                "📋 Danh sách lệnh Google Chat:\n\n"
+                "/ask <câu hỏi> — Hỏi đáp AI (Cô Hana sẽ trả lời)\n"
+                "/grade — Chấm bài tập (đính kèm ảnh bài làm)\n"
+                "/dailysum — Tóm tắt bài học hôm nay (AI tạo tự động)\n"
+                "/demosum — Xem bản tóm tắt mẫu (không tốn AI)\n"
+                "/help — Hiển thị danh sách lệnh này"
+            )
+            await self._reply_to_chat(space_name, help_text, thread_name)
+            return
+
         # /dailysum — AI-generated daily summary
         if text.lower().startswith("/dailysum"):
             logger.info(f"[GCHAT] /dailysum from {event['user_name']}")
@@ -364,6 +384,12 @@ class GoogleChatListener:
         if text.lower().startswith("/demosum"):
             logger.info(f"[GCHAT] /demosum from {event['user_name']}")
             await self._handle_demosum(event)
+            return
+
+        # /grade — grade submitted homework images
+        if text.lower().startswith("/grade"):
+            logger.info(f"[GCHAT] /grade from {event['user_name']}")
+            await self._handle_grade(event)
             return
 
         # /ask <question> — AI Q&A
@@ -392,6 +418,263 @@ class GoogleChatListener:
 
         # Any other message — silently ignore (bot shares space with everyone)
         logger.debug(f"[GCHAT] Ignoring non-command message from {event['user_name']}: {text[:40]}")
+
+    async def _handle_grade(self, event: dict) -> None:
+        """
+        Handle the /grade command: grade student-submitted images.
+
+        Flow:
+        1. Validate attachments are present
+        2. Download attachment images to temp files
+        3. Grade using HomeworkGradingWorkflow
+        4. Store submission in submission_store
+        5. Reply with feedback in Google Chat
+        6. Send notification to teacher (low-grade alert if applicable)
+        """
+        space_name = event["space_name"]
+        thread_name = event["thread_name"]
+        user_id = event["user_id"]
+        user_name = event["user_name"]
+        attachments = event.get("attachments", [])
+
+        # Validate attachments
+        if not attachments:
+            await self._reply_to_chat(
+                space_name,
+                "Vui lòng đính kèm hình ảnh bài tập sau /grade ạ.\n"
+                "Ví dụ: @Vinschool Bot /grade (kèm ảnh bài tập)",
+                thread_name,
+            )
+            return
+
+        # Send processing indicator
+        await self._reply_to_chat(
+            space_name,
+            f"Cô Hana đang chấm bài của {user_name}... "
+            f"({len(attachments)} ảnh)",
+            thread_name,
+        )
+
+        # Download attachments to temp directory
+        downloaded_paths = []
+        temp_dir = tempfile.mkdtemp(prefix="vinschool_grade_")
+
+        try:
+            for i, attachment in enumerate(attachments):
+                path = await self._download_attachment(
+                    attachment, temp_dir, index=i
+                )
+                if path:
+                    downloaded_paths.append(path)
+
+            if not downloaded_paths:
+                await self._reply_to_chat(
+                    space_name,
+                    "Xin lỗi, cô không tải được ảnh bài tập. "
+                    "Vui lòng thử lại ạ.",
+                    thread_name,
+                )
+                return
+
+            # Create assignment entity for grading
+            from domain.models.assignment import Assignment
+
+            assignment = Assignment(
+                title="Google Chat Submission",
+                teacher_id=UUID("00000000-0000-4000-8000-000000000001"),
+                student_id=UUID("00000000-0000-4000-8000-000000000002"),
+                class_name="4B5",
+                subject="Mathematics",
+                max_score=10.0,
+            )
+            assignment.submit(
+                file_path=downloaded_paths[0],
+            )
+
+            # Grade using workflow
+            from workflow.homework_grading_workflow import (
+                HomeworkGradingWorkflow,
+            )
+
+            workflow = HomeworkGradingWorkflow()
+            rubric = workflow.create_standard_rubric(
+                "Mathematics", "homework"
+            )
+
+            grading_result = await workflow.grade_homework(
+                assignment=assignment,
+                rubric=rubric,
+                submission_file_path=downloaded_paths[0],
+                notify_teacher=True,
+                teacher_email=settings.TEACHER_EMAIL,
+                student_name=user_name,
+            )
+
+            # Store in submission store for LMS dashboard
+            from services.chat.submission_store import add_submission
+
+            score = grading_result.get("score", 0.0)
+            feedback = grading_result.get("feedback", "")
+            details = grading_result.get("details", {})
+            grading_error = grading_result.get("error", None)
+
+            # Sanitize feedback — if it contains raw error text
+            # (e.g. tesseract not found), replace with a clean message
+            has_error = (
+                grading_error
+                or "error" in feedback.lower()
+                or "tesseract" in feedback.lower()
+                or "not installed" in feedback.lower()
+            )
+            if has_error and score == 0.0:
+                feedback = (
+                    "Cô Hana chưa thể đọc rõ bài tập trong ảnh.\n"
+                    "Vui lòng chụp lại rõ hơn và gửi lại ạ."
+                )
+                details = {}  # Clear error details
+
+            submission = add_submission(
+                student_id=user_id,
+                student_name=user_name,
+                score=score,
+                max_score=assignment.max_score,
+                feedback=feedback,
+                attachment_paths=downloaded_paths,
+                subject=assignment.subject,
+                assignment_title=assignment.title,
+                details=details,
+            )
+
+            # Build reply message
+            reply_parts = [
+                f"Kết quả chấm bài của {user_name}:",
+                f"Điểm: {score:.1f}/{assignment.max_score:.1f}",
+            ]
+            if feedback:
+                reply_parts.append(f"\nNhận xét:\n{feedback}")
+
+            strengths = details.get("strengths", [])
+            if strengths:
+                reply_parts.append(
+                    "\nĐiểm mạnh:\n"
+                    + "\n".join(f"- {s}" for s in strengths)
+                )
+
+            improvements = details.get("improvements", [])
+            if improvements:
+                reply_parts.append(
+                    "\nCần cải thiện:\n"
+                    + "\n".join(f"- {i}" for i in improvements)
+                )
+
+            reply_text = "\n".join(reply_parts)
+            # Strip any markdown formatting characters
+            reply_text = reply_text.replace("*", "").replace("#", "")
+            await self._reply_to_chat(
+                space_name, reply_text, thread_name
+            )
+
+            logger.info(
+                f"[GCHAT] Graded submission for {user_name}: "
+                f"{score}/{assignment.max_score}"
+            )
+
+        except Exception as e:
+            logger.error(f"[GCHAT] Error grading submission: {e}")
+            await self._reply_to_chat(
+                space_name,
+                "Xin lỗi, có lỗi xảy ra khi chấm bài.\n"
+                "Vui lòng thử lại sau ạ.",
+                thread_name,
+            )
+
+    async def _download_attachment(
+        self,
+        attachment: dict,
+        temp_dir: str,
+        index: int = 0,
+    ) -> Optional[str]:
+        """
+        Download a Google Chat attachment to a temporary file.
+
+        Args:
+            attachment: Attachment metadata from the Chat event.
+            temp_dir: Directory to save the downloaded file.
+            index: Attachment index (for naming).
+
+        Returns:
+            Path to the downloaded file, or None on failure.
+        """
+        try:
+            # Google Chat attachments have:
+            # - attachmentDataRef.resourceName for Chat API download
+            # - downloadUri for direct download (if available)
+            # - contentName for the filename
+            # - contentType for MIME type
+            content_name = attachment.get(
+                "contentName", f"attachment_{index}.jpg"
+            )
+            download_uri = attachment.get("downloadUri")
+            resource_name = (
+                attachment.get("attachmentDataRef", {})
+                .get("resourceName")
+            )
+
+            file_path = os.path.join(temp_dir, content_name)
+
+            # Try direct download URI first
+            if download_uri:
+                token = self._get_access_token()
+                async with httpx.AsyncClient() as client:
+                    resp = await client.get(
+                        download_uri,
+                        headers={"Authorization": f"Bearer {token}"},
+                        timeout=30,
+                        follow_redirects=True,
+                    )
+                    if resp.status_code == 200:
+                        with open(file_path, "wb") as f:
+                            f.write(resp.content)
+                        logger.info(
+                            f"[GCHAT] Downloaded attachment: "
+                            f"{content_name}"
+                        )
+                        return file_path
+
+            # Try Chat API media download
+            if resource_name:
+                token = self._get_access_token()
+                url = (
+                    f"https://chat.googleapis.com/v1/media/"
+                    f"{resource_name}?alt=media"
+                )
+                async with httpx.AsyncClient() as client:
+                    resp = await client.get(
+                        url,
+                        headers={"Authorization": f"Bearer {token}"},
+                        timeout=30,
+                        follow_redirects=True,
+                    )
+                    if resp.status_code == 200:
+                        with open(file_path, "wb") as f:
+                            f.write(resp.content)
+                        logger.info(
+                            f"[GCHAT] Downloaded attachment via API: "
+                            f"{content_name}"
+                        )
+                        return file_path
+
+            logger.warning(
+                f"[GCHAT] Could not download attachment: "
+                f"{content_name}"
+            )
+            return None
+
+        except Exception as e:
+            logger.error(
+                f"[GCHAT] Error downloading attachment: {e}"
+            )
+            return None
 
     async def _on_debounced(
         self, user_id: str, combined_text: str, **metadata

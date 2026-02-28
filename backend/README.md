@@ -39,8 +39,8 @@ Multi-agent AI system for educational support built with PydanticAI, Milvus, and
 ### Interactive Chat Service (Cô Hana)
 
 - **Channel-Aware AI**: Two separate personas — parent-facing (Zalo) and student-facing (Google Chat)
-- **Zalo commands**: `/ask <question>` (AI Q&A), `/dailysum` (AI-generated daily summary), `/demosum` (hardcoded demo summary — no API cost)
-- **Google Chat commands**: Same three commands when @mentioning the bot; any other mention is silently ignored
+- **Zalo commands**: `/ask <question>` (AI Q&A), `/dailysum` (AI-generated daily summary), `/demosum` (hardcoded demo summary — no API cost), `/help` (list commands)
+- **Google Chat commands**: `/ask`, `/dailysum`, `/demosum`, `/grade` (submit homework images for AI grading), `/help` (list commands) when @mentioning the bot; any other mention is silently ignored
 - **Single-Message Flow**: Every command returns exactly one reply — no intermediate "thinking" or typing indicator messages
 - **Message Debouncing**: Rapid messages from the same user are batched (3s quiet window) into a single AI request
 - **Conversation History**: Per-user history (last 10 messages) for contextual follow-ups
@@ -248,7 +248,8 @@ backend/
 │   ├── chat/                        # Interactive AI chat (Cô Hana)
 │   │   ├── chat_service.py          # Channel-aware LLM orchestrator
 │   │   ├── debouncer.py             # Per-user message debouncing
-│   │   └── google_chat_listener.py  # Pub/Sub consumer + Chat API replier
+│   │   ├── google_chat_listener.py  # Pub/Sub consumer + Chat API replier
+│   │   └── submission_store.py      # In-memory store for /grade submissions
 │   ├── scheduler.py                 # 6pm daily summary scheduler + /dailysum trigger
 │   └── notification/                # Notification service
 │       ├── models.py                # Notification data models
@@ -437,14 +438,21 @@ The Zalo channel stores plain-text messages in-memory; the frontend polls `GET /
 
 **Zalo API endpoints:**
 
-| Method   | Endpoint              | Description                                                  |
-| -------- | --------------------- | ------------------------------------------------------------ |
-| `GET`    | `/api/zalo/messages`  | List all stored messages                                     |
-| `POST`   | `/api/zalo/send-demo` | Send the hardcoded daily summary to the Zalo UI              |
-| `POST`   | `/api/zalo/chat`      | `/ask` — AI Q&A; `/dailysum` — AI summary; `/demosum` — demo |
-| `DELETE` | `/api/zalo/messages`  | Clear all messages                                           |
+| Method   | Endpoint              | Description                                                                           |
+| -------- | --------------------- | ------------------------------------------------------------------------------------- |
+| `GET`    | `/api/zalo/messages`  | List all stored messages                                                              |
+| `POST`   | `/api/zalo/send-demo` | Send the hardcoded daily summary to the Zalo UI                                       |
+| `POST`   | `/api/zalo/chat`      | `/ask` — AI Q&A; `/dailysum` — AI summary; `/demosum` — demo; `/help` — list commands |
+| `DELETE` | `/api/zalo/messages`  | Clear all messages                                                                    |
 
-> **Note:** This uses an in-memory store — messages are lost when the server restarts. For production, replace with Zalo OA API integration.
+**Submission API endpoints** (populated by Google Chat `/grade` command):
+
+| Method   | Endpoint                                     | Description                            |
+| -------- | -------------------------------------------- | -------------------------------------- |
+| `GET`    | `/api/teacher/submissions`                   | List all graded submissions            |
+| `POST`   | `/api/teacher/submissions/{id}/view`         | Mark a submission as viewed by teacher |
+
+> **Note:** Zalo uses an in-memory store — messages are lost when the server restarts. For production, replace with Zalo OA API integration. Submissions also use an in-memory store for the demo.
 
 #### Notification Demos
 
@@ -461,12 +469,12 @@ The Zalo channel stores plain-text messages in-memory; the frontend polls `GET /
 
 The Chat Service provides **bidirectional** AI Q&A. Students and parents can ask questions and receive instant answers grounded in `data/lesson.txt`.
 
-| Channel     | Audience | Commands                                   | Persona               | Escalation Behaviour           |
-| ----------- | -------- | ------------------------------------------ | --------------------- | ------------------------------ |
-| Zalo clone  | Parents  | `/ask <question>`, `/dailysum`, `/demosum` | Kính ngữ (formal)     | Apologise — no email           |
-| Google Chat | Students | `/ask <question>`, `/dailysum`, `/demosum` | Thân thiện (friendly) | Email teacher + notify student |
+| Channel     | Audience | Commands                                                      | Persona               | Escalation Behaviour           |
+| ----------- | -------- | ------------------------------------------------------------- | --------------------- | ------------------------------ |
+| Zalo clone  | Parents  | `/ask <question>`, `/dailysum`, `/demosum`, `/help`           | Kính ngữ (formal)     | Apologise — no email           |
+| Google Chat | Students | `/ask <question>`, `/grade`, `/dailysum`, `/demosum`, `/help` | Thân thiện (friendly) | Email teacher + notify student |
 
-> **Google Chat prefix required**: The bot only responds to messages that start with `/ask`, `/dailysum`, or `/demosum`. Any other @mention is silently ignored.
+> **Google Chat prefix required**: The bot only responds to messages that start with `/ask`, `/grade`, `/dailysum`, `/demosum`, or `/help`. Any other @mention is silently ignored.
 
 **Key features:**
 
@@ -516,11 +524,15 @@ Students use `/ask`, `/dailysum`, or `/demosum` when @mentioning the bot. Run th
 cd backend && python -m scripts.run_google_chat
 ```
 
-The bot only responds to `/ask`, `/dailysum`, and `/demosum` prefixes. For example:
+The bot responds to `/ask`, `/grade`, `/dailysum`, `/demosum`, and `/help` prefixes. For example:
 
 - `@Vinschool Bot /ask Hôm nay học bài gì?`
+- `@Vinschool Bot /grade` (attach homework images)
 - `@Vinschool Bot /dailysum`
 - `@Vinschool Bot /demosum`
+- `@Vinschool Bot /help`
+
+The `/grade` command accepts attached images, grades them using Gemini Vision API, stores the result in the LMS dashboard, and sends a low-grade alert email if the score is below 7.0.
 
 Every command returns a single reply — no intermediate typing indicators.
 
