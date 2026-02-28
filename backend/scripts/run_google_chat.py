@@ -13,9 +13,12 @@ Usage:
 
 Students interact with the bot in Google Chat using:
     @Vinschool Bot /ask <question>       — AI Q&A
+    @Vinschool Bot /grade                — Grade submitted homework images
     @Vinschool Bot /dailysum             — demo daily lesson summary
 
 The script starts a minimal HTTP server on port 8000.
+The frontend (Next.js on port 3000) can poll this server
+for graded submissions at GET /api/teacher/submissions.
 """
 
 import sys
@@ -23,6 +26,21 @@ import os
 
 # Add backend to path so imports work
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# ===== Mock database modules to avoid requiring Milvus for demo =====
+# The grading pipeline (HomeworkGradingWorkflow → GradingAgent → database)
+# tries to connect to Milvus at import time. For the demo we don't need
+# vector search, so we pre-seed sys.modules with harmless mocks.
+from unittest.mock import MagicMock
+
+_mock_db = MagicMock()
+for mod_name in [
+    "database",
+    "database.milvus_client",
+    "database.repositories",
+    "database.repositories.document_repository",
+]:
+    sys.modules.setdefault(mod_name, _mock_db)
 
 import uvicorn
 from fastapi import FastAPI
@@ -87,7 +105,12 @@ async def lifespan(app: FastAPI):
     print()
     print("  Now send a message in Google Chat:")
     print("    @Vinschool Bot /ask Bài tập Toán tuần này là gì?")
+    print("    @Vinschool Bot /grade (kèm ảnh bài tập)")
     print("    @Vinschool Bot /dailysum")
+    print()
+    print("  Teacher LMS dashboard:")
+    print("    http://localhost:3000 (run frontend with npm run dev)")
+    print("    GET http://localhost:8000/api/teacher/submissions")
     print()
     print("  Press Ctrl+C to stop")
     print("=" * 60 + "\n")
@@ -116,8 +139,42 @@ app.add_middleware(
 async def root():
     return {
         "status": "Google Chat demo server running",
-        "usage": "Send /ask <question>, /dailysum, or /demosum in Google Chat",
+        "usage": "Send /ask <question>, /grade, /dailysum, or /demosum in Google Chat",
     }
+
+
+# ===== Lightweight submission endpoints (avoid importing full teacher router) =====
+# The full teacher router imports DailyContentWorkflow → database → MilvusClient,
+# which crashes without a running Milvus instance. These inline endpoints only
+# import submission_store, which has zero heavy dependencies.
+
+from services.chat.submission_store import (
+    get_submissions,
+    get_unviewed_count,
+    mark_viewed,
+)
+
+
+@app.get("/api/teacher/submissions")
+async def get_teacher_submissions():
+    """Get all graded submissions for the LMS dashboard."""
+    submissions = get_submissions()
+    return {
+        "submissions": submissions,
+        "count": len(submissions),
+        "unviewed_count": get_unviewed_count(),
+    }
+
+
+@app.post("/api/teacher/submissions/{submission_id}/view")
+async def mark_submission_viewed(submission_id: str):
+    """Mark a submission as viewed by the teacher."""
+    from fastapi import HTTPException
+
+    found = mark_viewed(submission_id)
+    if not found:
+        raise HTTPException(status_code=404, detail=f"Submission {submission_id} not found")
+    return {"success": True, "submission_id": submission_id}
 
 
 # ===== Main =====
