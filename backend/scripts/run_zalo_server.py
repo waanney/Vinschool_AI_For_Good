@@ -95,6 +95,28 @@ async def _handle_chat(sender: str, text: str) -> ChatResponse:
     # store — the frontend adds user messages directly to avoid duplicates.
     user_msg_id = f"user-{str(uuid.uuid4())[:8]}"
 
+    # /help command — show available commands
+    if text.lower().startswith("/help"):
+        help_text = (
+            "📋 Danh sách lệnh Zalo:\n\n"
+            "/ask <câu hỏi> — Hỏi đáp AI (Cô Hana sẽ trả lời)\n"
+            "/dailysum — Tóm tắt bài học hôm nay (AI tạo tự động)\n"
+            "/demosum — Xem bản tóm tắt mẫu (không tốn AI)\n"
+            "/help — Hiển thị danh sách lệnh này"
+        )
+        ai_msg_id = f"ai-{str(uuid.uuid4())[:8]}"
+        zalo_message_store.append({
+            "id": ai_msg_id,
+            "sender": "Cô Hana (AI)",
+            "text": help_text,
+            "time": now,
+            "is_ai": True,
+        })
+        return ChatResponse(
+            success=True, reply=help_text, is_ask=True,
+            user_msg_id=user_msg_id, ai_msg_id=ai_msg_id,
+        )
+
     is_ask = text.startswith("/ask")
 
     # /dailysum command — AI-generated daily summary
