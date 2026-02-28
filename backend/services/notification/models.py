@@ -18,6 +18,7 @@ class NotificationType(str, Enum):
     TEACHER_ESCALATION = "teacher_escalation"
     LOW_GRADE_ALERT = "low_grade_alert"
     DAILY_SUMMARY = "daily_summary"
+    SUBMISSION_GRADED = "submission_graded"
 
 
 class NotificationChannel(str, Enum):
@@ -85,6 +86,18 @@ class LowGradeContext(BaseModel):
     areas_for_improvement: list[str] = Field(default_factory=list)
 
 
+class SubmissionGradedContext(BaseModel):
+    """Context for a submission-graded notification sent to teacher."""
+    submission_id: str
+    student_name: str
+    assignment_title: str
+    subject: str
+    score: float
+    max_score: float = 10.0
+    feedback: Optional[str] = None
+    attachment_count: int = 0
+
+
 class LessonSummary(BaseModel):
     """Summary of a single lesson/subject for daily notification."""
     subject: str
@@ -123,6 +136,7 @@ class Notification(BaseModel):
     escalation_context: Optional[EscalationContext] = None
     low_grade_context: Optional[LowGradeContext] = None
     daily_summary_context: Optional[DailySummaryContext] = None
+    submission_graded_context: Optional[SubmissionGradedContext] = None
 
     # Metadata
     created_at: datetime = Field(default_factory=datetime.now)
