@@ -42,10 +42,35 @@ services:
         sync: false
       - key: OPENAI_API_KEY
         sync: false
-      - key: GEMINI_API_KEY
-        sync: false
       - key: APP_ENV
         value: production
+      # Notifications - Email/Gmail
+      - key: ENABLE_EMAIL_NOTIFICATIONS
+        value: "true"
+      - key: SMTP_HOST
+        value: "smtp.gmail.com"
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USERNAME
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: TEACHER_EMAIL
+        sync: false
+      # Notifications - Google Chat Webhook
+      - key: ENABLE_GOOGLE_CHAT_NOTIFICATIONS
+        value: "true"
+      - key: GOOGLE_CHAT_WEBHOOK_URL
+        sync: false
+      # Notifications - Google Chat Bot (Pub/Sub)
+      - key: GOOGLE_CLOUD_PROJECT_ID
+        sync: false
+      - key: GOOGLE_CHAT_PUBSUB_SUBSCRIPTION
+        sync: false
+      - key: GOOGLE_APPLICATION_CREDENTIALS
+        value: "/etc/secrets/google-credentials.json"
+      - key: GOOGLE_CHAT_SPACE_ID
+        sync: false
 
   # Frontend Next.js Service
   - type: web
