@@ -45,9 +45,10 @@ class Settings(BaseSettings):
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
         )
 
-    # Milvus (Vector Database)
     milvus_host: str = "localhost"
     milvus_port: int = 19530
+    milvus_uri: Optional[str] = None  # For Zilliz Cloud (e.g., https://id.zillizcloud.com)
+    milvus_token: Optional[str] = None # For Zilliz Cloud API Key
     milvus_collection_prefix: str = "vinschool"
 
     # LLM API Keys

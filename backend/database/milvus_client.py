@@ -40,12 +40,23 @@ class MilvusClient:
     def connect(self) -> None:
         """Establish connection to Milvus."""
         try:
-            connections.connect(
-                alias=self.alias,
-                host=settings.milvus_host,
-                port=settings.milvus_port,
-            )
-            logger.info(f"Connected to Milvus at {settings.milvus_host}:{settings.milvus_port}")
+            if settings.milvus_uri:
+                # Connect via URI and Token (Zilliz Cloud)
+                connections.connect(
+                    alias=self.alias,
+                    uri=settings.milvus_uri,
+                    token=settings.milvus_token,
+                    secure=True
+                )
+                logger.info(f"Connected to Milvus via URI: {settings.milvus_uri}")
+            else:
+                # Connect via host and port (Local Milvus)
+                connections.connect(
+                    alias=self.alias,
+                    host=settings.milvus_host,
+                    port=settings.milvus_port,
+                )
+                logger.info(f"Connected to Milvus at {settings.milvus_host}:{settings.milvus_port}")
         except Exception as e:
             logger.error(f"Failed to connect to Milvus: {e}")
             raise
