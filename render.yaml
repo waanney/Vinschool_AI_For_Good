@@ -4,7 +4,7 @@ services:
     name: vinschool-ai-backend
     env: docker
     dockerContext: ./backend
-    dockerfilePath: Dockerfile
+    dockerfilePath: backend/Dockerfile
     plan: starter
     healthCheckPath: /health
     envVars:
