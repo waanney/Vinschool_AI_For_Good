@@ -28,10 +28,17 @@ class Settings(BaseSettings):
     postgres_db: str = "vinschool_ai"
     postgres_user: str = "vinschool"
     postgres_password: str = "vinschool_password"
+    database_url: Optional[str] = None  # Automatically picks up DATABASE_URL if set
 
     @property
-    def database_url(self) -> str:
-        """Construct async database URL."""
+    def async_database_url(self) -> str:
+        """Construct async database URL, favoring DATABASE_URL if available."""
+        if self.database_url:
+            # Handle Render/Heroku style URLs (postgresql:// -> postgresql+asyncpg://)
+            if self.database_url.startswith("postgresql://"):
+                return self.database_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+            return self.database_url
+            
         return (
             f"postgresql+asyncpg://{self.postgres_user}:{self.postgres_password}"
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
@@ -39,7 +46,11 @@ class Settings(BaseSettings):
 
     @property
     def sync_database_url(self) -> str:
-        """Construct sync database URL for Alembic."""
+        """Construct sync database URL for Alembic, favoring DATABASE_URL if available."""
+        if self.database_url:
+            # Sync drivers use postgresql:// or postgres://
+            return self.database_url
+            
         return (
             f"postgresql://{self.postgres_user}:{self.postgres_password}"
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
