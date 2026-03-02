@@ -50,45 +50,52 @@ class BaseAgent(ABC):
     
     def _create_model(self):
         """
-        Create LLM model based on provider.
+        Create LLM model based on provider with fallback logic.
         
         Returns:
             Model instance (OpenAI, Gemini, or Anthropic)
         """
-        provider = self.config.provider.lower()
+        providers_to_try = [self.config.provider.lower()]
         
-        if provider == "openai":
-            if not settings.openai_api_key:
-                raise ValueError("OPENAI_API_KEY not configured")
-            return OpenAIModel(
-                model_name=self.config.model_name,
-                api_key=settings.openai_api_key,
-            )
-        
-        elif provider == "google" or provider == "gemini":
-            if not settings.gemini_api_key:
-                raise ValueError("GEMINI_API_KEY not configured in .env")
-            # GeminiModel uses GEMINI_API_KEY from environment
-            # Set it before creating the model
-            import os
-            os.environ['GEMINI_API_KEY'] = settings.gemini_api_key
-            return GeminiModel(
-                model_name=self.config.model_name,
-            )
-        
-        elif provider == "anthropic":
-            if not settings.anthropic_api_key:
-                raise ValueError("ANTHROPIC_API_KEY not configured")
-            return AnthropicModel(
-                model_name=self.config.model_name,
-                api_key=settings.anthropic_api_key,
-            )
-        
-        else:
-            raise ValueError(
-                f"Unsupported provider: {provider}. "
-                f"Use 'openai', 'google', or 'anthropic'"
-            )
+        # Add fallbacks if the primary choice fails
+        all_providers = ["google", "openai", "anthropic"]
+        for p in all_providers:
+            if p not in providers_to_try:
+                providers_to_try.append(p)
+                
+        errors = []
+        for provider in providers_to_try:
+            try:
+                if provider == "openai":
+                    if not settings.openai_api_key:
+                        raise ValueError("OPENAI_API_KEY not configured")
+                    return OpenAIModel(
+                        model_name=self.config.model_name if provider == self.config.provider.lower() else "gpt-4o-mini",
+                        api_key=settings.openai_api_key,
+                    )
+                
+                elif provider == "google" or provider == "gemini":
+                    if not settings.gemini_api_key:
+                        raise ValueError("GEMINI_API_KEY not configured")
+                    
+                    import os
+                    os.environ['GEMINI_API_KEY'] = settings.gemini_api_key
+                    return GeminiModel(
+                        model_name=self.config.model_name if provider == self.config.provider.lower() else "gemini-1.5-flash",
+                    )
+                
+                elif provider == "anthropic":
+                    if not settings.anthropic_api_key:
+                        raise ValueError("ANTHROPIC_API_KEY not configured")
+                    return AnthropicModel(
+                        model_name=self.config.model_name if provider == self.config.provider.lower() else "claude-3-haiku-20240307",
+                        api_key=settings.anthropic_api_key,
+                    )
+            except Exception as e:
+                errors.append(f"{provider}: {str(e)}")
+                continue
+
+        raise ValueError(f"Could not initialize any AI model. Errors: {'; '.join(errors)}")
     
     def _create_agent(self, system_prompt: str, **kwargs) -> PydanticAgent:
         """

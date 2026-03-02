@@ -76,7 +76,7 @@ class Settings(BaseSettings):
     gemini_api_key: Optional[str] = None  # For Gemini
 
     # Default LLM Provider
-    default_provider: str = "openai"  # openai, google, anthropic
+    default_provider: str = "google"  # openai, google, anthropic
 
     # Embedding Configuration
     embedding_provider: str = "google"  # openai or google
@@ -84,8 +84,8 @@ class Settings(BaseSettings):
     embedding_dimension: int = 768  # text-embedding-004 with output_dimensionality=768
 
     # Agent Configuration
-    default_llm_model: str = "gpt-4-turbo-preview"  # or gemini-1.5-pro, claude-3-opus
-    grading_llm_model: str = "gpt-4-turbo-preview"
+    default_llm_model: str = "gemini-2.5-flash"  
+    grading_llm_model: str = "gemini-2.5-flash"
     temperature: float = 0.7
     max_tokens: int = 2000
 
