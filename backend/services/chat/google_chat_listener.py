@@ -89,29 +89,46 @@ class GoogleChatListener:
         try:
             from google.oauth2 import service_account
 
-            creds_path = settings.GOOGLE_APPLICATION_CREDENTIALS
-            if not creds_path:
-                logger.error("[GCHAT] GOOGLE_APPLICATION_CREDENTIALS not set")
-                return None
-
+            # Method 1: Load from raw JSON content (env var)
+            json_content = getattr(settings, "GOOGLE_CREDENTIALS_JSON", None)
             scopes = [
                 "https://www.googleapis.com/auth/chat.bot",
                 "https://www.googleapis.com/auth/pubsub",
             ]
-            self._credentials = service_account.Credentials.from_service_account_file(
-                creds_path, scopes=scopes
-            )
-            logger.info("[GCHAT] Service account credentials loaded")
-            return self._credentials
+
+            if json_content:
+                try:
+                    import json
+                    info = json.loads(json_content)
+                    self._credentials = service_account.Credentials.from_service_account_info(
+                        info, scopes=scopes
+                    )
+                    logger.info("[GCHAT] Credentials loaded from GOOGLE_CREDENTIALS_JSON")
+                    return self._credentials
+                except Exception as e:
+                    logger.error(f"[GCHAT] Failed to load credentials from JSON string: {e}")
+
+            # Method 2: Load from file path (standard GOOGLE_APPLICATION_CREDENTIALS)
+            creds_path = settings.GOOGLE_APPLICATION_CREDENTIALS
+            if creds_path:
+                if os.path.exists(creds_path):
+                    self._credentials = service_account.Credentials.from_service_account_file(
+                        creds_path, scopes=scopes
+                    )
+                    logger.info(f"[GCHAT] Credentials loaded from file: {creds_path}")
+                    return self._credentials
+                else:
+                    logger.warning(f"[GCHAT] Credentials file not found: {creds_path}")
+            else:
+                logger.warning("[GCHAT] No Google credentials configured")
+
+            return None
 
         except ImportError:
-            logger.error(
-                "[GCHAT] google-auth not installed. "
-                "Run: pip install google-auth"
-            )
+            logger.error("[GCHAT] google-auth not installed")
             return None
         except Exception as e:
-            logger.error(f"[GCHAT] Failed to load credentials: {e}")
+            logger.error(f"[GCHAT] Unexpected error loading credentials: {e}")
             return None
 
     def _get_access_token(self) -> Optional[str]:

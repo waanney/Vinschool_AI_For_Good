@@ -64,6 +64,8 @@ services:
         value: "true"
       - key: GOOGLE_CHAT_WEBHOOK_URL
         sync: false
+      - key: GOOGLE_CREDENTIALS_JSON
+        sync: false
       # Notifications - Google Chat Bot (Pub/Sub)
       - key: GOOGLE_CLOUD_PROJECT_ID
         sync: false

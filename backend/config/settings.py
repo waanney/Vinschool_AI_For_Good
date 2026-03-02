@@ -102,6 +102,7 @@ class Settings(BaseSettings):
     GOOGLE_CLOUD_PROJECT_ID: Optional[str] = None
     GOOGLE_CHAT_PUBSUB_SUBSCRIPTION: Optional[str] = None  # e.g. "projects/my-proj/subscriptions/chat-sub"
     GOOGLE_APPLICATION_CREDENTIALS: Optional[str] = None  # Path to service account JSON key
+    GOOGLE_CREDENTIALS_JSON: Optional[str] = None  # Raw JSON content of service account key
     GOOGLE_CHAT_SPACE_ID: Optional[str] = None  # e.g. "spaces/AAAAxxxxxx"
 
     # Chat debounce settings
