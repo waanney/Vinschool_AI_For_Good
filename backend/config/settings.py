@@ -33,11 +33,19 @@ class Settings(BaseSettings):
     @property
     def async_database_url(self) -> str:
         """Construct async database URL, favoring DATABASE_URL if available."""
-        if self.database_url:
-            # Handle Render/Heroku style URLs (postgresql:// -> postgresql+asyncpg://)
-            if self.database_url.startswith("postgresql://"):
-                return self.database_url.replace("postgresql://", "postgresql+asyncpg://", 1)
-            return self.database_url
+        url = self.database_url
+        if url:
+            # Handle Render/Heroku style URLs (postgresql:// or postgres:// -> postgresql+asyncpg://)
+            if url.startswith("postgres://"):
+                url = url.replace("postgres://", "postgresql+asyncpg://", 1)
+            elif url.startswith("postgresql://"):
+                url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
+            
+            # Render databases require SSL. Append it if not present.
+            if "ssl=" not in url:
+                separator = "&" if "?" in url else "?"
+                url += f"{separator}ssl=require"
+            return url
             
         return (
             f"postgresql+asyncpg://{self.postgres_user}:{self.postgres_password}"

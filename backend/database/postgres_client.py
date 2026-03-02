@@ -57,6 +57,13 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 
 async def init_db() -> None:
     """Initialize database tables."""
+    # Sanitize URL for logging (hide password)
+    from urllib.parse import urlparse
+    parsed = urlparse(settings.async_database_url)
+    sanitized_url = f"{parsed.scheme}://{parsed.username}:****@{parsed.hostname}:{parsed.port}{parsed.path}"
+    
+    logger.info(f"Connecting to database: {sanitized_url}")
+    
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     logger.info("Database tables initialized")
