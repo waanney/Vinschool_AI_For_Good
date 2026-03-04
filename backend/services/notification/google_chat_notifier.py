@@ -4,9 +4,10 @@ Google Chat notification implementation.
 This module provides Google Chat notification functionality via two modes:
 
 1. **Chat API** (preferred): Uses a service-account to post messages through
-   the Google Chat REST API. Requires ``GOOGLE_APPLICATION_CREDENTIALS``
-   and ``GOOGLE_CHAT_SPACE_ID`` in ``.env``.  This is the same bot used
-   by the Pub/Sub listener, so there's only **one** bot identity.
+   the Google Chat REST API. Requires ``GOOGLE_CREDENTIALS_JSON``
+   (raw JSON string of the service account key) and ``GOOGLE_CHAT_SPACE_ID``
+   in ``.env``.  This is the same bot used by the Pub/Sub listener, so
+   there's only **one** bot identity.
 
 2. **Webhook** (legacy fallback): Uses an incoming webhook URL. Simpler
    but creates a second bot identity and doesn't support all features.
@@ -46,7 +47,7 @@ class GoogleChatNotifier(BaseNotifier):
         timeout: int = 30,
         enabled: bool = True,
         # Chat API mode (preferred)
-        credentials_path: Optional[str] = None,
+        credentials_json: Optional[str] = None,
         default_space_id: Optional[str] = None,
     ):
         super().__init__(enabled=enabled)
@@ -54,12 +55,12 @@ class GoogleChatNotifier(BaseNotifier):
         self.timeout = timeout
 
         # Chat API fields
-        self._credentials_path = credentials_path
+        self._credentials_json = credentials_json
         self._default_space_id = default_space_id
         self._credentials = None
 
         # Decide mode
-        self._use_chat_api = bool(credentials_path and default_space_id)
+        self._use_chat_api = bool(credentials_json and default_space_id)
         if self._use_chat_api:
             logger.info("[GCHAT-NOTIFIER] Using Chat API mode (service account)")
         elif default_webhook_url:
@@ -74,13 +75,14 @@ class GoogleChatNotifier(BaseNotifier):
     # ===== Credential helpers (Chat API mode) =====
 
     def _load_credentials(self):
-        """Load service-account credentials for the Chat API."""
+        """Load service-account credentials from JSON string."""
         try:
             from google.oauth2 import service_account
 
             scopes = ["https://www.googleapis.com/auth/chat.bot"]
-            self._credentials = service_account.Credentials.from_service_account_file(
-                self._credentials_path, scopes=scopes
+            info = json.loads(self._credentials_json)
+            self._credentials = service_account.Credentials.from_service_account_info(
+                info, scopes=scopes
             )
             return self._credentials
         except ImportError:
@@ -106,9 +108,10 @@ class GoogleChatNotifier(BaseNotifier):
     async def validate_config(self) -> tuple[bool, Optional[str]]:
         """Validate Google Chat configuration."""
         if self._use_chat_api:
-            import os
-            if not os.path.exists(self._credentials_path):
-                return False, f"Credentials file not found: {self._credentials_path}"
+            try:
+                json.loads(self._credentials_json)
+            except (json.JSONDecodeError, TypeError):
+                return False, "GOOGLE_CREDENTIALS_JSON is not valid JSON"
             return True, None
 
         if not self.default_webhook_url:

@@ -84,7 +84,7 @@ class NotificationService:
             default_webhook_url=settings.GOOGLE_CHAT_WEBHOOK_URL,
             timeout=settings.NOTIFICATION_TIMEOUT,
             enabled=settings.ENABLE_GOOGLE_CHAT_NOTIFICATIONS,
-            credentials_path=settings.GOOGLE_APPLICATION_CREDENTIALS,
+            credentials_json=settings.GOOGLE_CREDENTIALS_JSON,
             default_space_id=settings.GOOGLE_CHAT_SPACE_ID,
         )
 
