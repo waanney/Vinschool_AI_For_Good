@@ -4,7 +4,7 @@ Lightweight standalone Google Chat listener demo.
 Runs the Google Chat Pub/Sub listener WITHOUT needing PostgreSQL, Milvus,
 or the full api/main.py. Only requires:
   - .env with Google Chat Pub/Sub settings
-  - credentials/ service account JSON
+  - GOOGLE_CREDENTIALS_JSON env var (service account JSON string)
   - Gemini API key
 
 Usage:
@@ -62,7 +62,7 @@ def _print_config() -> bool:
     checks = {
         "GOOGLE_CLOUD_PROJECT_ID": settings.GOOGLE_CLOUD_PROJECT_ID,
         "GOOGLE_CHAT_PUBSUB_SUBSCRIPTION": settings.GOOGLE_CHAT_PUBSUB_SUBSCRIPTION,
-        "GOOGLE_APPLICATION_CREDENTIALS": settings.GOOGLE_APPLICATION_CREDENTIALS,
+        "GOOGLE_CREDENTIALS_JSON": "(set)" if settings.GOOGLE_CREDENTIALS_JSON else "",
         "GOOGLE_CHAT_SPACE_ID": getattr(settings, "GOOGLE_CHAT_SPACE_ID", ""),
         "gemini_api_key": ("***" + settings.gemini_api_key[-4:]) if settings.gemini_api_key else "",
         "default_provider": settings.default_provider,

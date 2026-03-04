@@ -274,7 +274,7 @@ async def demo_daily_summary_students():
     print_notification_preview(notification)
 
     if settings.ENABLE_GOOGLE_CHAT_NOTIFICATIONS and (settings.GOOGLE_CHAT_WEBHOOK_URL or settings.GOOGLE_CHAT_SPACE_ID):
-        gchat_mode = "Chat API" if settings.GOOGLE_CHAT_SPACE_ID and settings.GOOGLE_APPLICATION_CREDENTIALS else "Webhook"
+        gchat_mode = "Chat API" if settings.GOOGLE_CHAT_SPACE_ID and settings.GOOGLE_CREDENTIALS_JSON else "Webhook"
         print(f"\n  Sending daily summary to Google Chat ({gchat_mode})...")
         results = await service.send(notification)
         print_results(results, "-> Google Chat space")

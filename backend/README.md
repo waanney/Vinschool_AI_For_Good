@@ -417,12 +417,14 @@ GOOGLE_CHAT_WEBHOOK_URL=https://chat.googleapis.com/v1/spaces/xxx/messages?key=y
 **Chat API mode (service account — supports replies and richer features):**
 
 Configure a GCP service account with Chat API access and set the space name.
+Use `GOOGLE_CREDENTIALS_JSON` to pass the service account key as a single-line
+JSON string (for local dev, run `cat key.json | jq -c` to get the compact form).
 
 ```bash
 ENABLE_GOOGLE_CHAT_NOTIFICATIONS=true
 GOOGLE_CLOUD_PROJECT_ID=your-gcp-project-id
 GOOGLE_CHAT_PUBSUB_SUBSCRIPTION=projects/your-gcp-project-id/subscriptions/chat-events-sub
-GOOGLE_APPLICATION_CREDENTIALS=credentials/your-service-account-key.json
+GOOGLE_CREDENTIALS_JSON={"type":"service_account","project_id":"...","private_key_id":"...","private_key":"...","client_email":"...@...iam.gserviceaccount.com",...}
 GOOGLE_CHAT_SPACE_ID=spaces/AAAAxxxxxx
 ```
 
@@ -547,22 +549,6 @@ Every command returns a single reply — no intermediate typing indicators.
 
 ```bash
 TEACHER_EMAIL=teacher@vinschool.edu.vn  # Recipient for escalation emails
-```
-
-## Testing
-
-```bash
-# Run all tests (101 tests)
-pytest tests/ -v
-
-# Run with coverage
-pytest --cov=. --cov-report=html
-
-# Run specific test suites
-pytest tests/test_chat_service.py -v          # ChatService (30 tests)
-pytest tests/test_debouncer.py -v             # MessageDebouncer (9 tests)
-pytest tests/test_google_chat_listener.py -v  # GoogleChatListener (16 tests)
-pytest tests/test_notification_service.py -v  # NotificationService (46 tests)
 ```
 
 ## Contributing
