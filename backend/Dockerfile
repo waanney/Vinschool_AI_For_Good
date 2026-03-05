@@ -26,10 +26,12 @@ COPY workflow ./workflow
 COPY scripts ./scripts
 COPY __init__.py ./
 
+# Install uv
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
 # Install Python dependencies
-# Note: Use pip in Docker for simplicity. UV is recommended for local dev.
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -e .
+COPY uv.lock ./
+RUN uv pip install --no-cache --system -e .
 
 # Production stage
 FROM python:3.11-slim
