@@ -30,7 +30,7 @@ COPY __init__.py ./
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 # Install Python dependencies
-COPY uv.lock ./
+COPY uv.lock* ./
 RUN uv pip install --no-cache --system -e .
 
 # Production stage
