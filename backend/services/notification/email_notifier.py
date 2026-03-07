@@ -2,7 +2,8 @@
 Email notification implementation.
 
 This module provides email notification functionality using SMTP.
-Supports HTML formatting for rich notification content.
+Supports HTML formatting for rich notification content and multiple
+recipients per notification (comma-separated in ``TeacherInfo.email``).
 Used for: teacher escalations, low grade alerts.
 """
 
@@ -80,9 +81,15 @@ class EmailNotifier(BaseNotifier):
             return False, f"Failed to connect to SMTP server: {str(e)}"
 
     async def send(self, notification: Notification) -> NotificationResult:
-        """Send email notification."""
-        recipient = self._get_recipient_email(notification)
-        if not recipient:
+        """Send email notification to one or more recipients.
+
+        The teacher email field may contain a single address or a
+        comma-separated list (e.g. ``"a@x.com, b@x.com"``).  All
+        addresses are placed in the ``To`` header so every recipient
+        receives the same email in a single SMTP transaction.
+        """
+        recipients = self._get_recipient_emails(notification)
+        if not recipients:
             return NotificationResult(
                 notification_id=notification.notification_id,
                 success=False,
@@ -90,11 +97,13 @@ class EmailNotifier(BaseNotifier):
                 error_message="No recipient email address found",
             )
 
+        to_header = ", ".join(recipients)
+
         try:
             msg = MIMEMultipart("alternative")
             msg["Subject"] = notification.title
             msg["From"] = f"{self.sender_name} <{self.sender_email}>"
-            msg["To"] = recipient
+            msg["To"] = to_header
 
             html_content = self._create_html_content(notification)
             plain_content = self._create_plain_content(notification)
@@ -113,7 +122,7 @@ class EmailNotifier(BaseNotifier):
                     server.login(self.username, self.password)
                     message_id = server.send_message(msg)
 
-            logger.info(f"Email sent successfully to {recipient}")
+            logger.info(f"Email sent successfully to {to_header} ({len(recipients)} recipient(s))")
 
             return NotificationResult(
                 notification_id=notification.notification_id,
@@ -124,7 +133,7 @@ class EmailNotifier(BaseNotifier):
             )
 
         except Exception as e:
-            error_msg = f"Failed to send email: {str(e)}"
+            error_msg = f"Failed to send email to {to_header}: {str(e)}"
             logger.error(error_msg)
             return NotificationResult(
                 notification_id=notification.notification_id,
@@ -133,11 +142,17 @@ class EmailNotifier(BaseNotifier):
                 error_message=error_msg,
             )
 
-    def _get_recipient_email(self, notification: Notification) -> Optional[str]:
-        """Get recipient email from notification."""
-        if notification.teacher and notification.teacher.email:
-            return notification.teacher.email
-        return None
+    def _get_recipient_emails(self, notification: Notification) -> list[str]:
+        """Parse recipient email(s) from the notification's teacher field.
+
+        Supports a single address or a comma-separated list.
+        Returns a deduplicated list of non-empty addresses.
+        """
+        if not notification.teacher or not notification.teacher.email:
+            return []
+        return list(dict.fromkeys(
+            e.strip() for e in notification.teacher.email.split(",") if e.strip()
+        ))
 
     def _create_html_content(self, notification: Notification) -> str:
         """Create HTML email content based on notification type."""
