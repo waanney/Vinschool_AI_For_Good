@@ -196,7 +196,7 @@ class QuestionAnsweringWorkflow:
         teacher_webhook: Optional[str] = None,
     ) -> None:
         """
-        Send notification to teacher about escalated question.
+        Send notification to teacher(s) about escalated question.
 
         This is a helper method that handles notification creation and sending.
         If teacher info is not provided, notification is skipped.
