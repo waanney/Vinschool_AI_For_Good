@@ -15,6 +15,10 @@ async def init_milvus():
     # Create main document collection
     collection = milvus_client.create_document_collection("documents")
     logger.info(f"Created collection: {collection.name}")
+
+    # Create grading results collection
+    grading_col = milvus_client.create_grading_collection("grading_results")
+    logger.info(f"Created collection: {grading_col.name}")
     
     logger.info("Milvus initialization complete!")
 

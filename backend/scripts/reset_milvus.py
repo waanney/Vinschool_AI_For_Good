@@ -1,6 +1,6 @@
 """
-Reset Milvus collection with new configuration.
-Drops existing collection and recreates with correct dimension.
+Reset Milvus collections with new configuration.
+Drops existing collections and recreates with correct dimensions.
 """
 
 import asyncio
@@ -10,25 +10,31 @@ from utils.logger import logger
 
 
 async def reset_milvus():
-    """Drop and recreate Milvus collection."""
-    collection_name = "vinschool_documents"
-    
+    """Drop and recreate Milvus collections."""
+    collections = {
+        "vinschool_documents": "documents",
+        "vinschool_grading_results": "grading_results",
+    }
+
     logger.info("Resetting Milvus collections...")
-    
-    # Drop existing collection if it exists
-    if utility.has_collection(collection_name, using=milvus_client.alias):
-        logger.info(f"Dropping existing collection: {collection_name}")
-        utility.drop_collection(collection_name, using=milvus_client.alias)
-        logger.info(f"✓ Dropped collection: {collection_name}")
-    else:
-        logger.info(f"Collection {collection_name} does not exist yet")
-    
-    # Create new collection with updated schema
-    logger.info("Creating new collection with updated schema...")
-    collection = milvus_client.create_document_collection("documents")
-    logger.info(f"✓ Created collection: {collection.name}")
-    logger.info(f"Collection ready with embedding dimension: 3072")
-    
+
+    for full_name, short_name in collections.items():
+        # Drop existing collection if it exists
+        if utility.has_collection(full_name, using=milvus_client.alias):
+            logger.info(f"Dropping existing collection: {full_name}")
+            utility.drop_collection(full_name, using=milvus_client.alias)
+            logger.info(f"✓ Dropped collection: {full_name}")
+        else:
+            logger.info(f"Collection {full_name} does not exist yet")
+
+    # Recreate collections
+    logger.info("Creating collections with updated schema...")
+    doc_col = milvus_client.create_document_collection("documents")
+    logger.info(f"✓ Created collection: {doc_col.name}")
+
+    grading_col = milvus_client.create_grading_collection("grading_results")
+    logger.info(f"✓ Created collection: {grading_col.name}")
+
     logger.info("\n" + "="*60)
     logger.info("Milvus reset complete!")
     logger.info("You can now run populate_mock_data.py")
