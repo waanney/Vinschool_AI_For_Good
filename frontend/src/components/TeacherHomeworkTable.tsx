@@ -230,11 +230,88 @@ export default function TeacherHomeworkTable({ userName }: { userName: string })
                 <div className="flex space-x-8 mb-6 mt-6 text-sm font-medium">
                   {['all', 'mandatory', 'reference'].map((t) => (<label key={t} className="flex items-center space-x-2 cursor-pointer"><input type="radio" checked={filter === t} onChange={() => setFilter(t)} className="accent-[#4f46e5]" /><span>{t === 'all' ? 'Tất cả' : t === 'mandatory' ? 'Bài tập bắt buộc' : 'Bài tập tham khảo'}</span></label>))}
                 </div>
-                <div className="border border-slate-200 rounded-xl overflow-hidden shadow-sm"><table className="w-full text-left text-sm"><thead className="bg-[#e0f2fe] text-slate-700 font-bold text-center"><tr><th className="p-4 border-b">Unit</th><th className="p-4 border-b">Bài Tập</th><th className="p-4 border-b">Dạng bài tập</th><th className="p-4 border-b">Deadline</th><th className="p-4 border-b">Chi tiết</th><th className="p-4 border-b">Tình trạng nộp bài</th></tr></thead><tbody>{homeworkList.filter(it => filter === 'all' || it.typeKey === filter).map((item) => { const unviewedStaticCount = students.filter(s => !viewedStudentIds.includes(s.stt)).length; const unviewedApiCount = apiSubmissions.filter(sub => !sub.is_viewed).length; const totalUnviewed = unviewedStaticCount + unviewedApiCount; return (<tr key={item.id} className="border-b border-slate-100 text-center hover:bg-slate-50 transition-colors"><td className="p-4 font-bold border-r border-slate-100 w-24 text-slate-800">{item.unit}</td><td className="p-4 font-medium text-blue-900">{item.title}</td><td className={`p-4 font-bold ${item.color}`}>{item.type}</td><td className="p-4 text-slate-500">{item.deadline}</td><td className="p-4 relative"><button onClick={() => { setActiveHW(item); setView('detail'); }} className="text-blue-600 underline font-medium hover:text-blue-800 cursor-pointer">Bấm vào để xem</button>{totalUnviewed > 0 && <span className="absolute top-2 right-4 bg-red-500 text-white text-[9px] w-4 h-4 flex items-center justify-center rounded-full shadow-sm">{totalUnviewed}</span>}</td><td className="p-4 text-slate-500 font-bold">4/40 Học sinh</td></tr>); })}</tbody></table></div>
+                <div className="border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+                  <table className="w-full text-left text-sm">
+                    <thead className="bg-[#e0f2fe] text-slate-700 font-bold text-center">
+                      <tr>
+                        <th className="p-4 border-b">Unit</th>
+                        <th className="p-4 border-b">Bài Tập</th>
+                        <th className="p-4 border-b">Dạng bài tập</th>
+                        <th className="p-4 border-b">Deadline</th>
+                        <th className="p-4 border-b">Chi tiết</th>
+                        <th className="p-4 border-b">Tình trạng nộp bài</th>
+                      </tr>
+                    </thead>
+                    <tbody>{homeworkList.filter(it => filter === 'all' || it.typeKey === filter).map((item) => {
+                      const unviewedStaticCount = students.filter(s => !viewedStudentIds.includes(s.stt)).length;
+                      const unviewedApiCount = apiSubmissions.filter(sub => !sub.is_viewed).length;
+                      const totalUnviewed = unviewedStaticCount + unviewedApiCount;
+                      return (
+                        <tr key={item.id} className="border-b border-slate-100 text-center hover:bg-slate-50 transition-colors">
+                          <td className="p-4 font-bold border-r border-slate-100 w-24 text-slate-800">{item.unit}</td>
+                          <td className="p-4 font-medium text-blue-900">{item.title}</td>
+                          <td className={`p-4 font-bold ${item.color}`}>{item.type}</td>
+                          <td className="p-4 text-slate-500">{item.deadline}</td>
+                          <td className="p-4 relative"><button onClick={() => { setActiveHW(item); setView('detail'); }} className="text-blue-600 underline font-medium hover:text-blue-800 cursor-pointer">Bấm vào để xem</button>{totalUnviewed > 0 && <span className="absolute top-2 right-4 bg-red-500 text-white text-[9px] w-4 h-4 flex items-center justify-center rounded-full shadow-sm">{totalUnviewed}</span>}</td>
+                          <td className="p-4 text-slate-500 font-bold">4/40 Học sinh</td>
+                        </tr>
+                      );
+                    })}</tbody>
+                  </table>
+                </div>
               </>
             ) : (
               <>
-                <div className="animate-in fade-in duration-500"><button onClick={() => setView('list')} className="mb-4 text-sm text-blue-600 font-medium hover:underline flex items-center">← Quay lại danh sách bài tập</button><h2 className="text-[13px] font-bold text-slate-800 mb-6 leading-relaxed">{activeHW?.fullTitle}</h2><div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm"><table className="w-full text-left text-[12px]"><thead className="bg-[#e0f2fe] text-gray-700 font-bold text-center"><tr><th className="p-3 border-b border-r border-slate-100 w-12">STT</th><th className="p-3 border-b border-r border-slate-100 w-40">Học sinh</th><th className="p-3 border-b border-r border-slate-100 w-20">Điểm</th><th className="p-3 border-b border-r border-slate-100 w-28">Thời gian nộp bài</th><th className="p-3 border-b border-r border-slate-100">Nhận xét</th><th className="p-3 border-b border-r border-slate-100 w-16 text-center">Chi tiết</th><th className="p-3 border-b border-slate-100 w-56">Bài tập được đề xuất thêm</th></tr></thead><tbody>{/* === AI-graded submissions from /grade Google Chat command — hiển thị TRƯỚC === */}{apiSubmissions.map((sub, idx) => (<tr key={sub.id} onClick={() => { if (!sub.is_viewed) markSubmissionViewed(sub.id); }} className={`border-b border-slate-100 cursor-pointer transition-colors duration-300 ${sub.is_viewed ? 'bg-white' : 'bg-[#f3f4f6]'}`}><td className="p-3 text-center font-bold border-r border-slate-100 text-slate-800">{idx + 1}</td><td className="p-3 font-bold border-r border-slate-100 text-slate-700">{sub.student_name}</td><td className={`p-3 text-center border-r border-slate-100 font-bold ${sub.score < 5 ? 'text-red-500' : sub.score >= 7 ? 'text-green-600' : 'text-orange-500'}`}>{sub.score.toFixed(1)}/{sub.max_score.toFixed(1)}</td><td className="p-3 text-center border-r border-slate-100 text-slate-500 font-medium">{new Date(sub.graded_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</td><td className="p-3 border-r italic text-slate-600 leading-relaxed">{sub.feedback || '-'}</td><td className="p-3 border-r border-slate-100 text-center">{sub.attachment_paths && sub.attachment_paths.length > 0 ? (<div onClick={(e) => { e.stopPropagation(); setSelectedSubmission(sub); }} className="w-8 h-10 mx-auto border border-slate-200 bg-white shadow-sm overflow-hidden cursor-pointer hover:ring-2 hover:ring-blue-400 transition-all"><img src={`${API_BASE}/uploads/${sub.attachment_paths[0].split(/[/\\]/).pop()}`} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).src = '/BaiTapHS1_Demo.jpg'; }} /></div>) : (<button onClick={(e) => { e.stopPropagation(); setSelectedSubmission(sub); }} className="text-blue-600 underline text-[11px] font-medium hover:text-blue-800">Xem bài</button>)}</td><td className="p-3 font-medium text-slate-700">{'-'}</td></tr>))}{students.map((s) => (<tr key={s.stt} onClick={() => !viewedStudentIds.includes(s.stt) && setViewedStudentIds([...viewedStudentIds, s.stt])} className={`border-b border-slate-100 cursor-pointer transition-colors duration-300 ${viewedStudentIds.includes(s.stt) ? 'bg-white' : 'bg-[#f3f4f6]'}`}><td className="p-3 text-center font-bold border-r border-slate-100 text-slate-800">{apiSubmissions.length + s.stt}</td><td className="p-3 font-bold border-r border-slate-100 text-slate-700">{s.name}</td><td className={`p-3 text-center border-r border-slate-100 font-bold ${s.score < 5 ? 'text-red-500' : s.score >= 7 ? 'text-green-600' : 'text-orange-500'}`}>{s.score.toFixed(1)}/{s.maxScore.toFixed(1)}</td><td className="p-3 text-center border-r border-slate-100 text-slate-500 font-medium">{s.subTimeShort}</td><td className="p-3 border-r italic text-slate-600 leading-relaxed">{s.comment}</td><td className="p-3 border-r border-slate-100 text-center"><div onClick={(e) => { e.stopPropagation(); setSelectedStaticStudent(s); }} className="w-8 h-10 mx-auto border border-slate-200 bg-white shadow-sm overflow-hidden cursor-pointer hover:ring-2 hover:ring-blue-400 transition-all"><img src={s.images[0]} className="w-full h-full object-cover" /></div></td><td className="p-3 font-medium text-slate-700">{s.stt === 4 ? "Blook" : activeHW?.fullTitle.replace(".docx", "")}</td></tr>))}</tbody></table></div></div>
+                <div className="animate-in fade-in duration-500">
+                  <button onClick={() => setView('list')} className="mb-4 text-sm text-blue-600 font-medium hover:underline flex items-center">← Quay lại danh sách bài tập</button>
+                  <h2 className="text-[13px] font-bold text-slate-800 mb-6 leading-relaxed">{activeHW?.fullTitle}</h2>
+                  <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm">
+                    <table className="w-full text-left text-[12px]">
+                      <thead className="bg-[#e0f2fe] text-gray-700 font-bold text-center">
+                        <tr>
+                          <th className="p-3 border-b border-r border-slate-100 w-12">STT</th>
+                          <th className="p-3 border-b border-r border-slate-100 w-40">Học sinh</th>
+                          <th className="p-3 border-b border-r border-slate-100 w-20">Điểm</th>
+                          <th className="p-3 border-b border-r border-slate-100 w-28">Thời gian nộp bài</th>
+                          <th className="p-3 border-b border-r border-slate-100">Nhận xét</th>
+                          <th className="p-3 border-b border-r border-slate-100 w-16 text-center">Chi tiết</th>
+                          <th className="p-3 border-b border-slate-100 w-56">Bài tập được đề xuất thêm</th>
+                        </tr>
+                      </thead>
+                      <tbody>{/* === AI-graded submissions from /grade Google Chat command — hiển thị TRƯỚC === */}{apiSubmissions.map((sub, idx) => (
+                        <tr key={sub.id} onClick={() => { if (!sub.is_viewed) markSubmissionViewed(sub.id); }} className={`border-b border-slate-100 cursor-pointer transition-colors duration-300 ${sub.is_viewed ? 'bg-white' : 'bg-[#f3f4f6]'}`}>
+                          <td className="p-3 text-center font-bold border-r border-slate-100 text-slate-800">{idx + 1}</td>
+                          <td className="p-3 font-bold border-r border-slate-100 text-slate-700">{sub.student_name}</td>
+                          <td className={`p-3 text-center border-r border-slate-100 font-bold ${sub.score < 5 ? 'text-red-500' : sub.score >= 7 ? 'text-green-600' : 'text-orange-500'}`}>{sub.score.toFixed(1)}/{sub.max_score.toFixed(1)}</td>
+                          <td className="p-3 text-center border-r border-slate-100 text-slate-500 font-medium">{new Date(sub.graded_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</td>
+                          <td className="p-3 border-r italic text-slate-600 leading-relaxed">{sub.feedback || '-'}</td>
+                          <td className="p-3 border-r border-slate-100 text-center">{sub.attachment_paths && sub.attachment_paths.length > 0 ? (
+                            <div onClick={(e) => { e.stopPropagation(); setSelectedSubmission(sub); }} className="w-8 h-10 mx-auto border border-slate-200 bg-white shadow-sm overflow-hidden cursor-pointer hover:ring-2 hover:ring-blue-400 transition-all">
+                              <img src={`${API_BASE}/uploads/${sub.attachment_paths[0].split(/[/\\]/).pop()}`} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).src = '/BaiTapHS1_Demo.jpg'; }} />
+                            </div>
+                          ) : (
+                            <button onClick={(e) => { e.stopPropagation(); setSelectedSubmission(sub); }} className="text-blue-600 underline text-[11px] font-medium hover:text-blue-800">Xem bài</button>
+                          )}</td>
+                          <td className="p-3 font-medium text-slate-700">{'-'}</td>
+                        </tr>
+                      ))}{students.map((s) => (
+                        <tr key={s.stt} onClick={() => !viewedStudentIds.includes(s.stt) && setViewedStudentIds([...viewedStudentIds, s.stt])} className={`border-b border-slate-100 cursor-pointer transition-colors duration-300 ${viewedStudentIds.includes(s.stt) ? 'bg-white' : 'bg-[#f3f4f6]'}`}>
+                          <td className="p-3 text-center font-bold border-r border-slate-100 text-slate-800">{apiSubmissions.length + s.stt}</td>
+                          <td className="p-3 font-bold border-r border-slate-100 text-slate-700">{s.name}</td>
+                          <td className={`p-3 text-center border-r border-slate-100 font-bold ${s.score < 5 ? 'text-red-500' : s.score >= 7 ? 'text-green-600' : 'text-orange-500'}`}>{s.score.toFixed(1)}/{s.maxScore.toFixed(1)}</td>
+                          <td className="p-3 text-center border-r border-slate-100 text-slate-500 font-medium">{s.subTimeShort}</td>
+                          <td className="p-3 border-r italic text-slate-600 leading-relaxed">{s.comment}</td>
+                          <td className="p-3 border-r border-slate-100 text-center">
+                            <div onClick={(e) => { e.stopPropagation(); setSelectedStaticStudent(s); }} className="w-8 h-10 mx-auto border border-slate-200 bg-white shadow-sm overflow-hidden cursor-pointer hover:ring-2 hover:ring-blue-400 transition-all">
+                              <img src={s.images[0]} className="w-full h-full object-cover" />
+                            </div>
+                          </td>
+                          <td className="p-3 font-medium text-slate-700">{s.stt === 4 ? "Blook" : activeHW?.fullTitle.replace(".docx", "")}</td>
+                        </tr>
+                      ))}</tbody>
+                    </table>
+                  </div>
+                </div>
                 {/* === Submission Detail Modal (API) === */}
                 {selectedSubmission && (
                   <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setSelectedSubmission(null)}>
@@ -292,10 +369,19 @@ export default function TeacherHomeworkTable({ userName }: { userName: string })
                 </div>
               ) : reportView === 'result' ? (
                 <div className="p-6 animate-in slide-in-from-right duration-500">
-                  <div className="flex items-center space-x-4 mb-6"><button onClick={() => setReportView('select')} className="text-2xl font-bold hover:text-blue-700 transition-colors">❮</button><h2 className="text-xl font-bold text-slate-800">Báo cáo Unit 9 - Học sinh Cấn Trần Quang Bách VS081559</h2></div>
+                  <div className="flex items-center space-x-4 mb-6">
+                    <button onClick={() => setReportView('select')} className="text-2xl font-bold hover:text-blue-700 transition-colors">❮</button>
+                    <h2 className="text-xl font-bold text-slate-800">Báo cáo Unit 9 - Học sinh Cấn Trần Quang Bách VS081559</h2>
+                  </div>
                   <div className="border border-slate-300 rounded-xl overflow-hidden bg-white shadow-sm">
                     <table className="w-full text-left text-[12px] border-collapse">
-                      <thead className="bg-slate-50 border-b border-slate-300 font-bold"><tr><th className="p-3 border-r border-slate-300 w-20 text-center">UNIT</th><th className="p-3 border-r border-slate-300">NHẬN XÉT TÌNH HÌNH CHUNG</th><th className="p-3">BÀI TẬP</th></tr></thead>
+                      <thead className="bg-slate-50 border-b border-slate-300 font-bold">
+                        <tr>
+                          <th className="p-3 border-r border-slate-300 w-20 text-center">UNIT</th>
+                          <th className="p-3 border-r border-slate-300">NHẬN XÉT TÌNH HÌNH CHUNG</th>
+                          <th className="p-3">BÀI TẬP</th>
+                        </tr>
+                      </thead>
                       <tbody>
                         <tr className="align-top">
                           <td className="p-5 border-r border-slate-300 font-bold text-center text-slate-600">Unit 9</td>
@@ -322,7 +408,40 @@ export default function TeacherHomeworkTable({ userName }: { userName: string })
                   </div>
                 </div>
               ) : (
-                <div className="p-6 animate-in slide-in-from-bottom duration-500"><div className="flex items-center space-x-4 mb-6"><button onClick={() => setReportView('result')} className="text-2xl font-bold">❮</button><h2 className="text-xl font-bold text-slate-800 italic">Chi tiết bài tập Unit 9 - Cấn Trần Quang Bách</h2></div><div className="border border-slate-300 rounded-lg overflow-hidden bg-white shadow-sm"><table className="w-full text-left text-[12px]"><thead className="bg-[#e0f2fe] border-b border-slate-300 font-bold text-gray-700 text-center"><tr><th className="p-3 border-r border-slate-200 w-12">STT</th><th className="p-3 border-r border-slate-200">Bài tập</th><th className="p-3 border-r border-slate-200 w-32">Deadline</th><th className="p-3 border-r border-slate-200 w-32">Thời gian nộp bài</th><th className="p-3 border-r border-slate-300">Nh nhận xét</th><th className="p-3 w-16 text-center">Chi tiết</th></tr></thead><tbody>{progressAssignments.map(pa => (<tr key={pa.stt} className="border-b border-slate-100 hover:bg-slate-50 transition-colors"><td className="p-4 text-center border-r border-slate-200 font-bold text-slate-800">{pa.stt}</td><td className="p-4 border-r border-slate-200 font-medium text-slate-700">{pa.title}</td><td className={`p-4 text-center border-r border-slate-200 font-bold ${pa.status === 'late' ? 'text-red-500' : 'text-green-600'}`}>{pa.deadline || "-"}</td><td className={`p-4 text-center border-r border-slate-200 font-bold ${pa.status === 'late' ? 'text-red-500' : 'text-green-600'}`}>{pa.subTime}</td><td className="p-4 border-r border-slate-200 italic text-slate-500 leading-relaxed">-</td><td className="p-4 text-center"><div onClick={() => { setSelectedStudent(students[0]); setActiveHW({ fullTitle: `Unit 9: ${pa.title}` }); setView('images'); }} className="w-8 h-10 mx-auto border border-slate-200 bg-white overflow-hidden cursor-pointer hover:ring-2 hover:ring-blue-400 transition-all"><img src="/BaiTapHS1_Demo.jpg" className="w-full h-full object-cover opacity-80" /></div></td></tr>))}</tbody></table></div></div>
+                <div className="p-6 animate-in slide-in-from-bottom duration-500">
+                  <div className="flex items-center space-x-4 mb-6">
+                    <button onClick={() => setReportView('result')} className="text-2xl font-bold">❮</button>
+                    <h2 className="text-xl font-bold text-slate-800 italic">Chi tiết bài tập Unit 9 - Cấn Trần Quang Bách</h2>
+                  </div>
+                  <div className="border border-slate-300 rounded-lg overflow-hidden bg-white shadow-sm">
+                    <table className="w-full text-left text-[12px]">
+                      <thead className="bg-[#e0f2fe] border-b border-slate-300 font-bold text-gray-700 text-center">
+                        <tr>
+                          <th className="p-3 border-r border-slate-200 w-12">STT</th>
+                          <th className="p-3 border-r border-slate-200">Bài tập</th>
+                          <th className="p-3 border-r border-slate-200 w-32">Deadline</th>
+                          <th className="p-3 border-r border-slate-200 w-32">Thời gian nộp bài</th>
+                          <th className="p-3 border-r border-slate-300">Nhận xét</th>
+                          <th className="p-3 w-16 text-center">Chi tiết</th>
+                        </tr>
+                      </thead>
+                      <tbody>{progressAssignments.map(pa => (
+                        <tr key={pa.stt} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
+                          <td className="p-4 text-center border-r border-slate-200 font-bold text-slate-800">{pa.stt}</td>
+                          <td className="p-4 border-r border-slate-200 font-medium text-slate-700">{pa.title}</td>
+                          <td className={`p-4 text-center border-r border-slate-200 font-bold ${pa.status === 'late' ? 'text-red-500' : 'text-green-600'}`}>{pa.deadline || "-"}</td>
+                          <td className={`p-4 text-center border-r border-slate-200 font-bold ${pa.status === 'late' ? 'text-red-500' : 'text-green-600'}`}>{pa.subTime}</td>
+                          <td className="p-4 border-r border-slate-200 italic text-slate-500 leading-relaxed">-</td>
+                          <td className="p-4 text-center">
+                            <div onClick={() => { setSelectedStudent(students[0]); setActiveHW({ fullTitle: `Unit 9: ${pa.title}` }); setView('images'); }} className="w-8 h-10 mx-auto border border-slate-200 bg-white overflow-hidden cursor-pointer hover:ring-2 hover:ring-blue-400 transition-all">
+                              <img src="/BaiTapHS1_Demo.jpg" className="w-full h-full object-cover opacity-80" />
+                            </div>
+                          </td>
+                        </tr>
+                      ))}</tbody>
+                    </table>
+                  </div>
+                </div>
               )
             ) : (
               /* --- BÁO CÁO TIẾN TRÌNH --- */
@@ -341,12 +460,36 @@ export default function TeacherHomeworkTable({ userName }: { userName: string })
                   <div className="border border-slate-300 rounded-xl overflow-hidden bg-white shadow-sm mb-6">
                     <table className="w-full text-left text-[12px] border-collapse">
                       <thead className="bg-[#e0f2fe] border-b border-slate-300 font-bold text-gray-700 text-center">
-                        <tr><th className="p-3 border-r border-slate-300 w-1/3">Unit</th><th className="p-3 border-r border-slate-300">0 - 2</th><th className="p-3 border-r border-slate-300">2 - 4</th><th className="p-3 border-r border-slate-300">4 - 6</th><th className="p-3 border-r border-slate-300">6 - 8</th><th className="p-3">8 - 10</th></tr>
+                        <tr>
+                          <th className="p-3 border-r border-slate-300 w-1/3">Unit</th>
+                          <th className="p-3 border-r border-slate-300">0 - 2</th>
+                          <th className="p-3 border-r border-slate-300">2 - 4</th>
+                          <th className="p-3 border-r border-slate-300">4 - 6</th>
+                          <th className="p-3 border-r border-slate-300">6 - 8</th>
+                          <th className="p-3">8 - 10</th>
+                        </tr>
                       </thead>
                       <tbody>
-                        <tr className="border-b border-slate-200"><td className="p-4 border-r border-slate-300 font-bold text-slate-700">Unit 7: Fractions, decimals and percentages</td><td className="border-r border-slate-300"></td><td className="border-r border-slate-300"></td><td className="border-r border-slate-300"></td><td className="border-r border-slate-300"></td><td className="p-4 text-center font-bold text-blue-800 bg-blue-50/30">10</td></tr>
-                        <tr className="border-b border-slate-200"><td className="p-4 border-r border-slate-300 font-bold text-slate-700">Unit 8: Probability</td><td className="border-r border-slate-300"></td><td className="border-r border-slate-300"></td><td className="border-r border-slate-300"></td><td className="border-r border-slate-300"></td><td className="p-4 text-center font-bold text-blue-800 bg-blue-50/30">10</td></tr>
-                        <tr className="bg-slate-50 font-bold"><td className="p-4 border-r border-slate-300 uppercase">Progression Test</td><td colSpan={5} className="p-4 text-center text-blue-900 text-sm">9.8</td></tr>
+                        <tr className="border-b border-slate-200">
+                          <td className="p-4 border-r border-slate-300 font-bold text-slate-700">Unit 7: Fractions, decimals and percentages</td>
+                          <td className="border-r border-slate-300"></td>
+                          <td className="border-r border-slate-300"></td>
+                          <td className="border-r border-slate-300"></td>
+                          <td className="border-r border-slate-300"></td>
+                          <td className="p-4 text-center font-bold text-blue-800 bg-blue-50/30">10</td>
+                        </tr>
+                        <tr className="border-b border-slate-200">
+                          <td className="p-4 border-r border-slate-300 font-bold text-slate-700">Unit 8: Probability</td>
+                          <td className="border-r border-slate-300"></td>
+                          <td className="border-r border-slate-300"></td>
+                          <td className="border-r border-slate-300"></td>
+                          <td className="border-r border-slate-300"></td>
+                          <td className="p-4 text-center font-bold text-blue-800 bg-blue-50/30">10</td>
+                        </tr>
+                        <tr className="bg-slate-50 font-bold">
+                          <td className="p-4 border-r border-slate-300 uppercase">Progression Test</td>
+                          <td colSpan={5} className="p-4 text-center text-blue-900 text-sm">9.8</td>
+                        </tr>
                       </tbody>
                     </table>
                   </div>
@@ -371,15 +514,37 @@ export default function TeacherHomeworkTable({ userName }: { userName: string })
                             <tr><th className="p-2 border border-slate-300 w-1/4">Năng lực</th><th className="p-2 border border-slate-300 w-1/4">Mức đánh giá</th><th className="p-2 border border-slate-300">Giải thích</th></tr>
                           </thead>
                           <tbody>
-                            <tr><td className="p-2 border border-slate-300 font-bold">Số học</td><td className="p-2 border border-slate-300 text-center">5 – Xuất sắc</td><td className="p-2 border border-slate-300">Tính toán nhanh, hiểu tốt về số thập phân...</td></tr>
-                            <tr><td className="p-2 border border-slate-300 font-bold">Hình học & Đo lường</td><td className="p-2 border border-slate-300 text-center">5 – Xuất sắc</td><td className="p-2 border border-slate-300">Nhận diện hình 2D, 3D tốt.</td></tr>
-                            <tr><td className="p-2 border border-slate-300 font-bold">Thống kê</td><td className="p-2 border border-slate-300 text-center">4.5 – Thành thạo cao</td><td className="p-2 border border-slate-300">Đọc biểu đồ rất tốt...</td></tr>
-                            <tr><td className="p-2 border border-slate-300 font-bold">Đại số</td><td className="p-2 border border-slate-300 text-center">5 – Xuất sắc</td><td className="p-2 border border-slate-300">Tìm ra quy luật nhanh chóng...</td></tr>
-                            <tr><td className="p-2 border border-slate-300 font-bold">Suy luận TWM</td><td className="p-2 border border-slate-300 text-center">4.5 – Thành thạo cao</td><td className="p-2 border border-slate-300">Thành thạo trong việc phân tích...</td></tr>
+                            <tr>
+                              <td className="p-2 border border-slate-300 font-bold">Số học</td>
+                              <td className="p-2 border border-slate-300 text-center">5 – Xuất sắc</td>
+                              <td className="p-2 border border-slate-300">Tính toán nhanh, hiểu tốt về số thập phân...</td>
+                            </tr>
+                            <tr>
+                              <td className="p-2 border border-slate-300 font-bold">Hình học & Đo lường</td>
+                              <td className="p-2 border border-slate-300 text-center">5 – Xuất sắc</td>
+                              <td className="p-2 border border-slate-300">Nhận diện hình 2D, 3D tốt.</td>
+                            </tr>
+                            <tr>
+                              <td className="p-2 border border-slate-300 font-bold">Thống kê</td>
+                              <td className="p-2 border border-slate-300 text-center">4.5 – Thành thạo cao</td>
+                              <td className="p-2 border border-slate-300">Đọc biểu đồ rất tốt...</td>
+                            </tr>
+                            <tr>
+                              <td className="p-2 border border-slate-300 font-bold">Đại số</td>
+                              <td className="p-2 border border-slate-300 text-center">5 – Xuất sắc</td>
+                              <td className="p-2 border border-slate-300">Tìm ra quy luật nhanh chóng...</td>
+                            </tr>
+                            <tr>
+                              <td className="p-2 border border-slate-300 font-bold">Suy luận TWM</td>
+                              <td className="p-2 border border-slate-300 text-center">4.5 – Thành thạo cao</td>
+                              <td className="p-2 border border-slate-300">Thành thạo trong việc phân tích...</td>
+                            </tr>
                           </tbody>
                         </table>
                       </div>
-                      <div className="w-full lg:w-1/3 flex justify-center"><img src="/skills-chart.jpg" alt="Competency Radar" className="max-w-75 h-auto object-contain" /></div>
+                      <div className="w-full lg:w-1/3 flex justify-center">
+                        <img src="/skills-chart.jpg" alt="Competency Radar" className="max-w-75 h-auto object-contain" />
+                      </div>
                     </div>
                   </div>
 
