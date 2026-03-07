@@ -1,8 +1,14 @@
 """
 Teacher API endpoints.
-Handles teacher-specific operations like uploads and reports.
+
+Handles teacher-specific operations including:
+- Document uploads and processing
+- Daily lesson management (JSON and image-based via Gemini vision)
+- Graded submission retrieval for the LMS dashboard
+- Class reports
 """
 
+from datetime import date as date_today
 from typing import List, Optional
 from uuid import UUID
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException
@@ -57,6 +63,18 @@ class DailyLessonResponse(BaseModel):
     success: bool
     date: str
     subject: str
+    message: str
+
+
+class ImageLessonResponse(BaseModel):
+    """Response after parsing a lesson image and storing it."""
+    success: bool
+    date: str
+    subject: str
+    title: str
+    content: str
+    homework: str
+    notes: str
     message: str
 
 
@@ -329,3 +347,101 @@ async def get_daily_lessons(date: str):
     except Exception as e:
         logger.error(f"Daily lesson retrieval failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/daily-lesson/parse-image", response_model=ImageLessonResponse)
+async def parse_lesson_image(
+    file: UploadFile = File(...),
+    date: str = Form(""),
+    subject: str = Form(""),
+):
+    """
+    Upload a lesson image, parse it with Gemini 2.5 Pro, and store
+    the extracted content in the ``vinschool_daily_lessons`` Milvus
+    collection.
+
+    Accepts ``.jpg``, ``.jpeg``, or ``.png`` images.  Gemini reads
+    the image and returns structured fields (subject, title, content,
+    homework, notes) that are then embedded and inserted into Milvus.
+
+    Form fields:
+        file: The image file (required).
+        date: Lesson date in ``YYYY-MM-DD`` format (defaults to today).
+        subject: Optional subject hint to guide Gemini's parsing.
+
+    Returns:
+        The extracted lesson data along with a success flag.
+    """
+    # Validate file type
+    if file.content_type not in ("image/jpeg", "image/png"):
+        suffix = Path(file.filename or "").suffix.lower()
+        if suffix not in (".jpg", ".jpeg", ".png"):
+            raise HTTPException(
+                status_code=400,
+                detail="Only .jpg, .jpeg, and .png images are supported.",
+            )
+
+    image_bytes = await file.read()
+    if not image_bytes:
+        raise HTTPException(status_code=400, detail="Uploaded file is empty.")
+
+    # Determine MIME type
+    mime_type = file.content_type or "image/jpeg"
+    if mime_type not in ("image/jpeg", "image/png"):
+        mime_type = "image/jpeg"
+
+    # Default date to today
+    lesson_date = date.strip() if date.strip() else str(date_today.today())
+
+    try:
+        from utils.gemini_vision import parse_lesson_image as _parse_image
+
+        parsed = await _parse_image(
+            image_bytes=image_bytes,
+            mime_type=mime_type,
+            date_hint=lesson_date,
+            subject_hint=subject.strip(),
+        )
+    except (ValueError, RuntimeError) as exc:
+        logger.error(f"Image parsing failed: {exc}")
+        raise HTTPException(status_code=502, detail=str(exc))
+
+    # Store in Milvus
+    try:
+        from database.repositories.daily_lesson_repository import (
+            store_daily_lesson,
+        )
+
+        ok = await store_daily_lesson(
+            date=lesson_date,
+            subject=parsed["subject"],
+            title=parsed["title"],
+            content=parsed["content"],
+            homework=parsed["homework"],
+            notes=parsed["notes"],
+        )
+
+        if not ok:
+            raise HTTPException(
+                status_code=503,
+                detail="Milvus is unavailable — parsed content could not be stored.",
+            )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error(f"Milvus storage failed after parsing: {exc}")
+        raise HTTPException(status_code=500, detail=str(exc))
+
+    return ImageLessonResponse(
+        success=True,
+        date=lesson_date,
+        subject=parsed["subject"],
+        title=parsed["title"],
+        content=parsed["content"],
+        homework=parsed["homework"],
+        notes=parsed["notes"],
+        message=(
+            f"Lesson '{parsed['title']}' for {parsed['subject']} on "
+            f"{lesson_date} parsed and stored successfully."
+        ),
+    )
