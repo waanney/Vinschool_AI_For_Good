@@ -5,12 +5,15 @@ Stores graded homework submissions from the /grade Google Chat command.
 Each submission records the student info, grading results, and attachment
 paths so the LMS teacher dashboard can display them.
 
+Timestamps are stored as timezone-aware UTC ISO strings so the frontend
+can convert to the user's local time (e.g. Asia/Ho_Chi_Minh).
+
 This is a temporary in-memory store (module-level list) for the demo.
 When PostgreSQL is wired up, migrate to a proper repository.
 """
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from utils.logger import logger
@@ -59,7 +62,7 @@ def add_submission(
         "feedback": feedback,
         "attachment_paths": attachment_paths,
         "details": details or {},
-        "graded_at": datetime.utcnow().isoformat(),
+        "graded_at": datetime.now(timezone.utc).isoformat(),
         "is_viewed": False,
     }
 
