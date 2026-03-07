@@ -110,9 +110,14 @@ class Settings(BaseSettings):
     SMTP_USERNAME: str = ""
     SMTP_PASSWORD: str = ""
     SMTP_USE_TLS: bool = True
-    TEACHER_EMAIL: str = "teacher@vinschool.edu.vn"  # Teacher email for escalations
+    TEACHER_EMAIL: str = "teacher@vinschool.edu.vn"  # Comma-separated list of teacher emails for escalations/alerts
     NOTIFICATION_SENDER_EMAIL: str = "ai-assistant@vinschool.edu.vn"
     NOTIFICATION_SENDER_NAME: str = "Vinschool AI Assistant"
+
+    @property
+    def teacher_emails(self) -> list[str]:
+        """Parse TEACHER_EMAIL into a list (supports comma-separated values)."""
+        return [e.strip() for e in self.TEACHER_EMAIL.split(",") if e.strip()]
 
     # Google Chat Webhook settings
     GOOGLE_CHAT_WEBHOOK_URL: Optional[str] = None
