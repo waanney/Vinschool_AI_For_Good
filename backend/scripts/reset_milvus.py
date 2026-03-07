@@ -14,6 +14,8 @@ async def reset_milvus():
     collections = {
         "vinschool_documents": "documents",
         "vinschool_grading_results": "grading_results",
+        "vinschool_student_profiles": "student_profiles",
+        "vinschool_daily_lessons": "daily_lessons",
     }
 
     logger.info("Resetting Milvus collections...")
@@ -34,6 +36,12 @@ async def reset_milvus():
 
     grading_col = milvus_client.create_grading_collection("grading_results")
     logger.info(f"✓ Created collection: {grading_col.name}")
+
+    profiles_col = milvus_client.create_student_profiles_collection("student_profiles")
+    logger.info(f"✓ Created collection: {profiles_col.name}")
+
+    lessons_col = milvus_client.create_daily_lessons_collection("daily_lessons")
+    logger.info(f"✓ Created collection: {lessons_col.name}")
 
     logger.info("\n" + "="*60)
     logger.info("Milvus reset complete!")
