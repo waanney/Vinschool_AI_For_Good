@@ -30,6 +30,7 @@ See backend/README.md for detailed setup instructions.
 import asyncio
 import json
 import os
+import shutil
 import tempfile
 from typing import Optional
 from uuid import uuid4, UUID
@@ -542,7 +543,9 @@ class GoogleChatListener:
                 score=score,
                 max_score=assignment.max_score,
                 feedback=feedback,
-                attachment_paths=downloaded_paths,
+                attachment_paths=self._persist_images(
+                    downloaded_paths
+                ),
                 subject=assignment.subject,
                 assignment_title=assignment.title,
                 details=details,
@@ -590,6 +593,27 @@ class GoogleChatListener:
                 "Vui lòng thử lại sau ạ.",
                 thread_name,
             )
+
+    @staticmethod
+    def _persist_images(temp_paths: list[str]) -> list[str]:
+        """Copy downloaded temp images to a persistent uploads directory.
+
+        Returns a list of web-accessible relative paths like
+        ``submissions/<uuid>_<filename>`` that can be served by the
+        ``/uploads`` static-files mount.
+        """
+        from api.main import UPLOADS_DIR
+
+        UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+        persisted: list[str] = []
+        for src in temp_paths:
+            filename = f"{uuid4().hex[:8]}_{os.path.basename(src)}"
+            dest = UPLOADS_DIR / filename
+            shutil.copy2(src, dest)
+            # Relative to the /uploads mount root (uploads/)
+            persisted.append(f"submissions/{filename}")
+            logger.info(f"[GCHAT] Persisted image: {dest}")
+        return persisted
 
     async def _download_attachment(
         self,
