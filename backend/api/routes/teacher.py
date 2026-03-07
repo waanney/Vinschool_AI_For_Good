@@ -18,6 +18,9 @@ from utils.logger import logger
 router = APIRouter()
 
 
+# ===== Request / Response models =====
+
+
 class UploadResponse(BaseModel):
     """Response for document upload."""
     success: bool
@@ -33,6 +36,28 @@ class ReportRequest(BaseModel):
     subject: str
     start_date: Optional[str] = None
     end_date: Optional[str] = None
+
+
+class DailyLessonRequest(BaseModel):
+    """Request for uploading a daily lesson to Milvus.
+
+    Each entry represents one subject's lesson content for a given day.
+    Multiple entries can be posted for different subjects on the same date.
+    """
+    date: str
+    subject: str
+    title: str
+    content: str
+    homework: str = ""
+    notes: str = ""
+
+
+class DailyLessonResponse(BaseModel):
+    """Response after uploading a daily lesson."""
+    success: bool
+    date: str
+    subject: str
+    message: str
 
 
 @router.post("/upload", response_model=UploadResponse)
@@ -213,3 +238,94 @@ async def mark_submission_viewed(submission_id: str):
             detail=f"Submission {submission_id} not found",
         )
     return {"success": True, "submission_id": submission_id}
+
+
+# ===== Daily Lesson endpoints =====
+
+
+@router.post("/daily-lesson", response_model=DailyLessonResponse)
+async def upload_daily_lesson(request: DailyLessonRequest):
+    """
+    Upload a daily lesson entry to Milvus.
+
+    Each call stores one subject's content for a given date. Call
+    multiple times for different subjects on the same day.
+
+    The stored lessons are used by:
+    - ``/dailysum`` — to generate a daily summary
+    - ``/ask`` — to include lesson context in AI answers
+    - ``load_lesson_context()`` — to replace the static ``data/lesson.txt``
+
+    Example:
+        ```
+        POST /api/teacher/daily-lesson
+        {
+            "date": "2025-03-08",
+            "subject": "Toán",
+            "title": "Phân số — Cộng trừ phân số cùng mẫu",
+            "content": "Kiến thức chính: Khi cộng (trừ) hai phân số cùng mẫu...",
+            "homework": "Bài 1 trang 45 SGK, 5 bài tập phân số trong phiếu",
+            "notes": "Hạn nộp: thứ Hai tuần sau"
+        }
+        ```
+    """
+    try:
+        from database.repositories.daily_lesson_repository import (
+            store_daily_lesson,
+        )
+
+        ok = await store_daily_lesson(
+            date=request.date,
+            subject=request.subject,
+            title=request.title,
+            content=request.content,
+            homework=request.homework,
+            notes=request.notes,
+        )
+
+        if not ok:
+            raise HTTPException(
+                status_code=503,
+                detail="Milvus is unavailable — could not store lesson",
+            )
+
+        return DailyLessonResponse(
+            success=True,
+            date=request.date,
+            subject=request.subject,
+            message=f"Lesson '{request.title}' for {request.subject} on {request.date} stored successfully",
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Daily lesson upload failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/daily-lessons/{date}")
+async def get_daily_lessons(date: str):
+    """
+    Retrieve all lessons for a specific date.
+
+    Args:
+        date: Date in ``YYYY-MM-DD`` format.
+
+    Returns:
+        List of lesson entries for that date.
+    """
+    try:
+        from database.repositories.daily_lesson_repository import (
+            get_lessons_by_date,
+        )
+
+        lessons = await get_lessons_by_date(date)
+        return {
+            "date": date,
+            "count": len(lessons),
+            "lessons": lessons,
+        }
+
+    except Exception as e:
+        logger.error(f"Daily lesson retrieval failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
