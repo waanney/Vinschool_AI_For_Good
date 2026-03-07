@@ -15,6 +15,7 @@ Multi-agent AI system for educational support built with PydanticAI, Milvus, and
 
 - **Document Parsing**: Supports PPTX, DOCX, PDF, and images
 - **Vietnamese OCR**: Tesseract-based OCR with Vietnamese language support
+- **Lesson Image Parsing**: Upload a lesson photo and Gemini 2.5 Pro extracts structured content (subject, title, key points, homework) and stores it in Milvus
 - **Vector Embeddings**: Automatic embedding generation and storage in Milvus
 - **Metadata Extraction**: Keyword and summary generation
 
@@ -498,8 +499,9 @@ The Zalo channel stores plain-text messages in-memory; the frontend polls `GET /
 
 | Method | Endpoint                            | Description                              |
 | ------ | ----------------------------------- | ---------------------------------------- |
-| `POST` | `/api/teacher/daily-lesson`         | Upload a daily lesson entry to Milvus    |
-| `GET`  | `/api/teacher/daily-lessons/{date}` | Retrieve all lessons for a specific date |
+| `POST` | `/api/teacher/daily-lesson`              | Upload a daily lesson entry (JSON) to Milvus                                   |
+| `POST` | `/api/teacher/daily-lesson/parse-image` | Upload a lesson image, parse it with Gemini 2.5 Pro vision, and store in Milvus |
+| `GET`  | `/api/teacher/daily-lessons/{date}`     | Retrieve all lessons for a specific date                                       |
 
 > **Note:** Zalo uses an in-memory store — messages are lost when the server restarts. For production, replace with Zalo OA API integration. Submissions also use an in-memory store for the demo. Uploaded images are persisted in `uploads/submissions/` and served as static files at `/uploads/`.
 
