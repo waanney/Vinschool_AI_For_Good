@@ -40,13 +40,13 @@ class Settings(BaseSettings):
                 url = url.replace("postgres://", "postgresql+asyncpg://", 1)
             elif url.startswith("postgresql://"):
                 url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
-            
+
             # Render databases require SSL. Append it if not present.
             if "ssl=" not in url:
                 separator = "&" if "?" in url else "?"
                 url += f"{separator}ssl=require"
             return url
-            
+
         return (
             f"postgresql+asyncpg://{self.postgres_user}:{self.postgres_password}"
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
@@ -58,7 +58,7 @@ class Settings(BaseSettings):
         if self.database_url:
             # Sync drivers use postgresql:// or postgres://
             return self.database_url
-            
+
         return (
             f"postgresql://{self.postgres_user}:{self.postgres_password}"
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
@@ -80,11 +80,11 @@ class Settings(BaseSettings):
 
     # Embedding Configuration
     embedding_provider: str = "google"  # openai or google
-    embedding_model: str = "models/text-embedding-004"
+    embedding_model: str = "gemini-embedding-001"
     embedding_dimension: int = 768  # text-embedding-004 with output_dimensionality=768
 
     # Agent Configuration
-    default_llm_model: str = "gemini-2.5-flash"  
+    default_llm_model: str = "gemini-2.5-flash"
     grading_llm_model: str = "gemini-2.5-flash"
     temperature: float = 0.7
     max_tokens: int = 2000
@@ -110,19 +110,23 @@ class Settings(BaseSettings):
     SMTP_USERNAME: str = ""
     SMTP_PASSWORD: str = ""
     SMTP_USE_TLS: bool = True
-    TEACHER_EMAIL: str = "teacher@vinschool.edu.vn"  # Teacher email for escalations
+    TEACHER_EMAIL: str = "teacher@vinschool.edu.vn"  # Comma-separated list of teacher emails for escalations/alerts
     NOTIFICATION_SENDER_EMAIL: str = "ai-assistant@vinschool.edu.vn"
     NOTIFICATION_SENDER_NAME: str = "Vinschool AI Assistant"
 
-    # Google Chat settings
+    @property
+    def teacher_emails(self) -> list[str]:
+        """Parse TEACHER_EMAIL into a list (supports comma-separated values)."""
+        return [e.strip() for e in self.TEACHER_EMAIL.split(",") if e.strip()]
+
+    # Google Chat Webhook settings
     GOOGLE_CHAT_WEBHOOK_URL: Optional[str] = None
 
-    # Google Chat Pub/Sub settings (for bidirectional chat — @mention based)
+    # Google Chat Pub/Sub settings
     GOOGLE_CLOUD_PROJECT_ID: Optional[str] = None
-    GOOGLE_CHAT_PUBSUB_SUBSCRIPTION: Optional[str] = None  # e.g. "projects/my-proj/subscriptions/chat-sub"
-    GOOGLE_APPLICATION_CREDENTIALS: Optional[str] = None  # Path to service account JSON key
-    GOOGLE_CREDENTIALS_JSON: Optional[str] = None  # Raw JSON content of service account key
-    GOOGLE_CHAT_SPACE_ID: Optional[str] = None  # e.g. "spaces/AAAAxxxxxx"
+    GOOGLE_CHAT_PUBSUB_SUBSCRIPTION: Optional[str] = None
+    GOOGLE_CREDENTIALS_JSON: Optional[str] = None
+    GOOGLE_CHAT_SPACE_ID: Optional[str] = None
 
     # Chat debounce settings
     CHAT_DEBOUNCE_SECONDS: float = 3.0
@@ -139,8 +143,8 @@ class Settings(BaseSettings):
     # Low grade alert threshold (score out of max_score)
     LOW_GRADE_THRESHOLD: float = 7.0
 
-    # Daily summary scheduler
-    DAILY_SUMMARY_HOUR: int = 18  # Fire at this hour (24h, local time)
+    # Daily summary scheduler (24h, local time)
+    DAILY_SUMMARY_HOUR: int = 18  # Fire at this hour
     DAILY_SUMMARY_MINUTE: int = 0  # Fire at this minute
 
     # Security

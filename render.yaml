@@ -71,8 +71,6 @@ services:
         sync: false
       - key: GOOGLE_CHAT_PUBSUB_SUBSCRIPTION
         sync: false
-      - key: GOOGLE_APPLICATION_CREDENTIALS
-        value: "/etc/secrets/google-credentials.json"
       - key: GOOGLE_CHAT_SPACE_ID
         sync: false
 
@@ -86,6 +84,11 @@ services:
     rootDir: frontend
     envVars:
       - key: NEXT_PUBLIC_API_URL
+        fromService:
+          name: vinschool-ai-backend
+          type: web
+          property: host
+      - key: BACKEND_URL
         fromService:
           name: vinschool-ai-backend
           type: web

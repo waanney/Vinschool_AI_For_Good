@@ -6,7 +6,11 @@ events when users @-mention the bot in a space.  The bot recognises
 four slash commands embedded in the message text:
 
 - ``/ask <question>`` — AI Q&A (student-facing persona, debounced)
-- ``/grade``          — Grade submitted homework images via AI
+- ``/grade``          — Grade submitted homework images via AI; results are
+                        stored in Milvus so students can later ``/ask`` about
+                        their scores
+- ``/hw [môn]``       — Suggest supplementary homework based on the student's
+                        Milvus profile (strengths/weaknesses) and recent grades
 - ``/dailysum``       — AI-generated daily lesson summary
 - ``/demosum``        — hardcoded demo summary (no API cost)
 
@@ -30,6 +34,7 @@ See backend/README.md for detailed setup instructions.
 import asyncio
 import json
 import os
+import shutil
 import tempfile
 from typing import Optional
 from uuid import uuid4, UUID
@@ -85,44 +90,30 @@ class GoogleChatListener:
         return self._chat_service
 
     def _load_credentials(self):
-        """Load Google service account credentials."""
+        """Load Google service account credentials from GOOGLE_CREDENTIALS_JSON."""
         try:
             from google.oauth2 import service_account
 
-            # Method 1: Load from raw JSON content (env var)
-            json_content = getattr(settings, "GOOGLE_CREDENTIALS_JSON", None)
+            json_content = settings.GOOGLE_CREDENTIALS_JSON
             scopes = [
                 "https://www.googleapis.com/auth/chat.bot",
                 "https://www.googleapis.com/auth/pubsub",
             ]
 
-            if json_content:
-                try:
-                    import json
-                    info = json.loads(json_content)
-                    self._credentials = service_account.Credentials.from_service_account_info(
-                        info, scopes=scopes
-                    )
-                    logger.info("[GCHAT] Credentials loaded from GOOGLE_CREDENTIALS_JSON")
-                    return self._credentials
-                except Exception as e:
-                    logger.error(f"[GCHAT] Failed to load credentials from JSON string: {e}")
+            if not json_content:
+                logger.warning("[GCHAT] GOOGLE_CREDENTIALS_JSON not configured")
+                return None
 
-            # Method 2: Load from file path (standard GOOGLE_APPLICATION_CREDENTIALS)
-            creds_path = settings.GOOGLE_APPLICATION_CREDENTIALS
-            if creds_path:
-                if os.path.exists(creds_path):
-                    self._credentials = service_account.Credentials.from_service_account_file(
-                        creds_path, scopes=scopes
-                    )
-                    logger.info(f"[GCHAT] Credentials loaded from file: {creds_path}")
-                    return self._credentials
-                else:
-                    logger.warning(f"[GCHAT] Credentials file not found: {creds_path}")
-            else:
-                logger.warning("[GCHAT] No Google credentials configured")
-
-            return None
+            try:
+                info = json.loads(json_content)
+                self._credentials = service_account.Credentials.from_service_account_info(
+                    info, scopes=scopes
+                )
+                logger.info("[GCHAT] Credentials loaded from GOOGLE_CREDENTIALS_JSON")
+                return self._credentials
+            except Exception as e:
+                logger.error(f"[GCHAT] Failed to load credentials from JSON string: {e}")
+                return None
 
         except ImportError:
             logger.error("[GCHAT] google-auth not installed")
@@ -361,9 +352,10 @@ class GoogleChatListener:
         """
         Process a parsed Google Chat event.
 
-        Responds to four commands:
+        Responds to five commands:
         - /ask <question>  — AI Q&A (debounced, student persona)
         - /grade           — Grade submitted homework images
+        - /hw [môn]        — Suggest supplementary homework
         - /dailysum        — AI-generated lesson summary for today
         - /demosum         — hardcoded demo summary (no AI cost)
 
@@ -384,6 +376,7 @@ class GoogleChatListener:
                 "📋 Danh sách lệnh Google Chat:\n\n"
                 "/ask <câu hỏi> — Hỏi đáp AI (Cô Hana sẽ trả lời)\n"
                 "/grade — Chấm bài tập (đính kèm ảnh bài làm)\n"
+                "/hw [môn] — Gợi ý bài tập bổ sung (dựa trên hồ sơ học sinh)\n"
                 "/dailysum — Tóm tắt bài học hôm nay (AI tạo tự động)\n"
                 "/demosum — Xem bản tóm tắt mẫu (không tốn AI)\n"
                 "/help — Hiển thị danh sách lệnh này"
@@ -407,6 +400,12 @@ class GoogleChatListener:
         if text.lower().startswith("/grade"):
             logger.info(f"[GCHAT] /grade from {event['user_name']}")
             await self._handle_grade(event)
+            return
+
+        # /hw [subject] — supplementary homework suggestions
+        if text.lower().startswith("/hw"):
+            logger.info(f"[GCHAT] /hw from {event['user_name']}")
+            await self._handle_hw(event)
             return
 
         # /ask <question> — AI Q&A
@@ -532,6 +531,7 @@ class GoogleChatListener:
 
             score = grading_result.get("score", 0.0)
             feedback = grading_result.get("feedback", "")
+            detailed_feedback = grading_result.get("detailed_feedback", "")
             details = grading_result.get("details", {})
             grading_error = grading_result.get("error", None)
 
@@ -548,6 +548,7 @@ class GoogleChatListener:
                     "Cô Hana chưa thể đọc rõ bài tập trong ảnh.\n"
                     "Vui lòng chụp lại rõ hơn và gửi lại ạ."
                 )
+                detailed_feedback = ""
                 details = {}  # Clear error details
 
             submission = add_submission(
@@ -556,11 +557,38 @@ class GoogleChatListener:
                 score=score,
                 max_score=assignment.max_score,
                 feedback=feedback,
-                attachment_paths=downloaded_paths,
+                detailed_feedback=detailed_feedback,
+                attachment_paths=self._persist_images(
+                    downloaded_paths
+                ),
                 subject=assignment.subject,
                 assignment_title=assignment.title,
                 details=details,
             )
+
+            # Store grading result in Milvus so /ask can retrieve it
+            try:
+                from database.repositories.grading_repository import (
+                    store_grading_result,
+                )
+                await store_grading_result(
+                    student_id=f"gchat-{user_id}",
+                    student_name=user_name,
+                    subject=assignment.subject,
+                    assignment_title=assignment.title,
+                    score=score,
+                    max_score=assignment.max_score,
+                    feedback=feedback,
+                    detailed_feedback=detailed_feedback,
+                    strengths=details.get("strengths", []),
+                    improvements=details.get("improvements", []),
+                    graded_at=submission["graded_at"],
+                )
+            except Exception as milvus_err:
+                logger.warning(
+                    f"[GCHAT] Non-critical: failed to store grading "
+                    f"in Milvus: {milvus_err}"
+                )
 
             # Build reply message
             reply_parts = [
@@ -604,6 +632,82 @@ class GoogleChatListener:
                 "Vui lòng thử lại sau ạ.",
                 thread_name,
             )
+
+    async def _handle_hw(self, event: dict) -> None:
+        """
+        Handle the ``/hw`` command: suggest supplementary homework.
+
+        Flow:
+        1. Parse optional subject from ``/hw [môn]``
+        2. Look up student profile from Milvus
+        3. Look up recent grading results from Milvus
+        4. Build context and call LLM for personalised suggestions
+        5. Reply in Google Chat
+        """
+        space_name = event["space_name"]
+        thread_name = event["thread_name"]
+        user_id = event["user_id"]
+        user_name = event["user_name"]
+
+        # Parse optional subject: "/hw Toán" → subject "Toán"
+        text = event["text"].strip()
+        subject_hint = text[3:].strip() if len(text) > 3 else ""
+
+        # Send processing indicator
+        await self._reply_to_chat(
+            space_name,
+            f"Cô Hana đang chuẩn bị bài tập bổ sung cho {user_name}... ✏️",
+            thread_name,
+        )
+
+        try:
+            from services.chat.chat_service import (
+                ChatService,
+                CHANNEL_GCHAT,
+            )
+
+            service = ChatService()
+            suggestions = await service.suggest_homework(
+                user_id=f"gchat-{user_id}",
+                user_name=user_name,
+                subject_hint=subject_hint,
+            )
+
+            await self._reply_to_chat(space_name, suggestions, thread_name)
+            logger.info(
+                f"[GCHAT] /hw reply sent to {user_name} "
+                f"({len(suggestions)} chars)"
+            )
+
+        except Exception as e:
+            logger.error(f"[GCHAT] Error generating homework suggestions: {e}")
+            await self._reply_to_chat(
+                space_name,
+                "Xin lỗi, cô Hana chưa thể tạo bài tập bổ sung lúc này.\n"
+                "Vui lòng thử lại sau ạ.",
+                thread_name,
+            )
+
+    @staticmethod
+    def _persist_images(temp_paths: list[str]) -> list[str]:
+        """Copy downloaded temp images to a persistent uploads directory.
+
+        Returns a list of web-accessible relative paths like
+        ``submissions/<uuid>_<filename>`` that can be served by the
+        ``/uploads`` static-files mount.
+        """
+        from api.main import UPLOADS_DIR
+
+        UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+        persisted: list[str] = []
+        for src in temp_paths:
+            filename = f"{uuid4().hex[:8]}_{os.path.basename(src)}"
+            dest = UPLOADS_DIR / filename
+            shutil.copy2(src, dest)
+            # Relative to the /uploads mount root (uploads/)
+            persisted.append(f"submissions/{filename}")
+            logger.info(f"[GCHAT] Persisted image: {dest}")
+        return persisted
 
     async def _download_attachment(
         self,

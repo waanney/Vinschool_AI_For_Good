@@ -72,6 +72,7 @@ class HomeworkGradingWorkflow:
             "success": False,
             "score": 0.0,
             "feedback": "",
+            "detailed_feedback": "",
             "details": {},
             "error": None,
         }
@@ -98,6 +99,7 @@ class HomeworkGradingWorkflow:
             result["success"] = True
             result["score"] = grading_result.total_score
             result["feedback"] = grading_result.feedback
+            result["detailed_feedback"] = grading_result.detailed_feedback
             result["details"] = {
                 "criteria_scores": grading_result.criteria_scores,
                 "strengths": grading_result.strengths,
@@ -115,7 +117,7 @@ class HomeworkGradingWorkflow:
                 await self._notify_low_grade(
                     assignment=assignment,
                     score=grading_result.total_score,
-                    feedback=grading_result.feedback,
+                    feedback=grading_result.detailed_feedback or grading_result.feedback,
                     improvements=grading_result.improvements,
                     teacher_id=teacher_id,
                     teacher_name=teacher_name,
@@ -220,7 +222,7 @@ class HomeworkGradingWorkflow:
         student_name: Optional[str] = None,
     ) -> None:
         """
-        Send low grade alert to teacher when student scores below threshold.
+        Send low grade alert to teacher(s) when student scores below threshold.
         """
         if not teacher_email:
             logger.debug("No teacher email provided, skipping low grade notification")
@@ -270,7 +272,10 @@ class HomeworkGradingWorkflow:
 
             for result in results:
                 if result.success:
-                    logger.info(f"Low grade alert sent to {teacher_email}")
+                    logger.info(
+                        f"Low grade alert sent to {teacher_email} "
+                        f"({len([e for e in teacher_email.split(',') if e.strip()])} recipient(s))"
+                    )
                 else:
                     logger.warning(f"Low grade alert failed: {result.error_message}")
 

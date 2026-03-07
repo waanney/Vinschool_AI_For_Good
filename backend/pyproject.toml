@@ -9,28 +9,28 @@ dependencies = [
     "pydantic-ai>=0.0.13",
     "pydantic>=2.6.0",
     "pydantic-settings>=2.1.0",
-    
+
     # LLM Providers
     "openai>=1.12.0",
     "anthropic>=0.18.0",
     "google-generativeai>=0.8.0",  # For Gemini embeddings
     "google-cloud-pubsub>=2.18.0",  # For Google Chat Pub/Sub listener
     "google-auth>=2.25.0",  # For GCP service account auth
-    
+
     # Vector Database
     "pymilvus>=2.3.6",
-    
+
     # API Framework
     "fastapi>=0.109.0",
     "uvicorn[standard]>=0.27.0",
     "python-multipart>=0.0.9",
-    
+
     # Database
     "sqlalchemy>=2.0.25",
     "alembic>=1.13.1",
     "asyncpg>=0.29.0",
     "psycopg2-binary>=2.9.9",
-    
+
     # Document Processing
     "python-pptx>=0.6.23",
     "python-docx>=1.1.0",
@@ -38,14 +38,11 @@ dependencies = [
     "pytesseract>=0.3.10",
     "Pillow>=10.2.0",
     "pdf2image>=1.17.0",
-    
-    # Text Processing & Embeddings
-    "langchain>=0.1.6",
-    "langchain-community>=0.0.20",
-    "langchain-openai>=0.0.5",
-    "sentence-transformers>=2.3.1",
-    "tiktoken>=0.5.2",
-    
+
+    # Note: langchain, langchain-community, langchain-openai, sentence-transformers,
+    # and tiktoken were removed to reduce Docker image size (~2-3GB savings).
+    # Embeddings use google-generativeai and openai directly.
+
     # Utilities
     "aiofiles>=23.2.1",
     "python-dotenv>=1.0.1",

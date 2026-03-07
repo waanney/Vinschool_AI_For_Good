@@ -19,6 +19,9 @@ from utils.logger import logger
 router = APIRouter()
 
 
+# ===== Request / Response models =====
+
+
 class QuestionRequest(BaseModel):
     """Request for asking a question."""
     student_id: str
@@ -34,6 +37,30 @@ class QuestionResponse(BaseModel):
     confidence: float
     escalated: bool
     sources: List[str] = []
+
+
+class StudentProfileRequest(BaseModel):
+    """Request for creating / updating a student profile.
+
+    The ``student_id`` must match the platform-prefixed ID used by the
+    chat bot (e.g. ``gchat-users/107677…``).
+    """
+    student_id: str
+    student_name: str
+    grade: int = 4
+    class_name: str = "4B5"
+    subjects: List[str] = []
+    strengths: List[str] = []
+    weaknesses: List[str] = []
+    learning_level: str = ""
+    notes: str = ""
+
+
+class StudentProfileResponse(BaseModel):
+    """Response after creating / updating a student profile."""
+    success: bool
+    student_id: str
+    message: str
 
 
 
@@ -270,4 +297,100 @@ async def request_practice_exercises(request: PracticeExerciseRequest):
         
     except Exception as e:
         logger.error(f"Practice request failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ===== Student Profile endpoints =====
+
+
+@router.post("/profile", response_model=StudentProfileResponse)
+async def create_or_update_profile(request: StudentProfileRequest):
+    """
+    Create or update a student profile in Milvus.
+
+    The profile stores strengths, weaknesses, subjects, learning level,
+    and other metadata used by the ``/hw`` command to generate
+    personalised supplementary homework suggestions.
+
+    If a profile with the same ``student_id`` already exists it will be
+    replaced (upsert semantics).
+
+    Example:
+        ```
+        POST /api/student/profile
+        {
+            "student_id": "gchat-users/107677372930172037429",
+            "student_name": "Phan Khánh",
+            "grade": 4,
+            "class_name": "4B5",
+            "subjects": ["Toán", "Tiếng Việt", "Tiếng Anh"],
+            "strengths": ["Tính nhẩm nhanh", "Đọc hiểu tốt"],
+            "weaknesses": ["Phân số", "Viết chính tả"],
+            "learning_level": "Khá",
+            "notes": ""
+        }
+        ```
+    """
+    try:
+        from database.repositories.student_profile_repository import (
+            store_student_profile,
+        )
+
+        ok = await store_student_profile(
+            student_id=request.student_id,
+            student_name=request.student_name,
+            grade=request.grade,
+            class_name=request.class_name,
+            subjects=request.subjects,
+            strengths=request.strengths,
+            weaknesses=request.weaknesses,
+            learning_level=request.learning_level,
+            notes=request.notes,
+        )
+
+        if not ok:
+            raise HTTPException(
+                status_code=503,
+                detail="Milvus is unavailable — could not store profile",
+            )
+
+        return StudentProfileResponse(
+            success=True,
+            student_id=request.student_id,
+            message=f"Profile for {request.student_name} stored successfully",
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Student profile creation failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/profile/{student_id:path}")
+async def get_profile(student_id: str):
+    """
+    Retrieve a student profile by ``student_id``.
+
+    The ``student_id`` is the platform-prefixed ID, e.g.
+    ``gchat-users/107677372930172037429``.  Because the ID contains a
+    slash the path parameter uses ``:path`` matching.
+    """
+    try:
+        from database.repositories.student_profile_repository import (
+            get_student_profile,
+        )
+
+        profile = await get_student_profile(student_id)
+        if profile is None:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No profile found for student_id={student_id}",
+            )
+        return profile
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Student profile retrieval failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))

@@ -1,8 +1,14 @@
 """
 Teacher API endpoints.
-Handles teacher-specific operations like uploads and reports.
+
+Handles teacher-specific operations including:
+- Document uploads and processing
+- Daily lesson management (JSON and image-based via Gemini vision)
+- Graded submission retrieval for the LMS dashboard
+- Class reports
 """
 
+from datetime import date as date_today
 from typing import List, Optional
 from uuid import UUID
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException
@@ -16,6 +22,9 @@ from workflow.daily_content_workflow import DailyContentWorkflow
 from utils.logger import logger
 
 router = APIRouter()
+
+
+# ===== Request / Response models =====
 
 
 class UploadResponse(BaseModel):
@@ -33,6 +42,40 @@ class ReportRequest(BaseModel):
     subject: str
     start_date: Optional[str] = None
     end_date: Optional[str] = None
+
+
+class DailyLessonRequest(BaseModel):
+    """Request for uploading a daily lesson to Milvus.
+
+    Each entry represents one subject's lesson content for a given day.
+    Multiple entries can be posted for different subjects on the same date.
+    """
+    date: str
+    subject: str
+    title: str
+    content: str
+    homework: str = ""
+    notes: str = ""
+
+
+class DailyLessonResponse(BaseModel):
+    """Response after uploading a daily lesson."""
+    success: bool
+    date: str
+    subject: str
+    message: str
+
+
+class ImageLessonResponse(BaseModel):
+    """Response after parsing a lesson image and storing it."""
+    success: bool
+    date: str
+    subject: str
+    title: str
+    content: str
+    homework: str
+    notes: str
+    message: str
 
 
 @router.post("/upload", response_model=UploadResponse)
@@ -157,6 +200,7 @@ class SubmissionResponse(BaseModel):
     score: float
     max_score: float
     feedback: str
+    detailed_feedback: str = ""
     attachment_paths: list[str]
     details: dict
     graded_at: str
@@ -164,10 +208,11 @@ class SubmissionResponse(BaseModel):
 
 
 class SubmissionsListResponse(BaseModel):
-    """List of submissions with unviewed count for notification badge."""
+    """List of submissions with unviewed count and grading thresholds."""
     submissions: list[SubmissionResponse]
     count: int
     unviewed_count: int
+    low_grade_threshold: float
 
 
 @router.get("/submissions", response_model=SubmissionsListResponse)
@@ -182,12 +227,15 @@ async def get_submissions():
         get_submissions,
         get_unviewed_count,
     )
+    from config.settings import get_settings
 
+    app_settings = get_settings()
     submissions = get_submissions()
     return SubmissionsListResponse(
         submissions=[SubmissionResponse(**s) for s in submissions],
         count=len(submissions),
         unviewed_count=get_unviewed_count(),
+        low_grade_threshold=app_settings.LOW_GRADE_THRESHOLD,
     )
 
 
@@ -208,3 +256,192 @@ async def mark_submission_viewed(submission_id: str):
             detail=f"Submission {submission_id} not found",
         )
     return {"success": True, "submission_id": submission_id}
+
+
+# ===== Daily Lesson endpoints =====
+
+
+@router.post("/daily-lesson", response_model=DailyLessonResponse)
+async def upload_daily_lesson(request: DailyLessonRequest):
+    """
+    Upload a daily lesson entry to Milvus.
+
+    Each call stores one subject's content for a given date. Call
+    multiple times for different subjects on the same day.
+
+    The stored lessons are used by:
+    - ``/dailysum`` — to generate a daily summary
+    - ``/ask`` — to include lesson context in AI answers
+    - ``load_lesson_context()`` — to replace the static ``data/lesson.txt``
+
+    Example:
+        ```
+        POST /api/teacher/daily-lesson
+        {
+            "date": "2025-03-08",
+            "subject": "Toán",
+            "title": "Phân số — Cộng trừ phân số cùng mẫu",
+            "content": "Kiến thức chính: Khi cộng (trừ) hai phân số cùng mẫu...",
+            "homework": "Bài 1 trang 45 SGK, 5 bài tập phân số trong phiếu",
+            "notes": "Hạn nộp: thứ Hai tuần sau"
+        }
+        ```
+    """
+    try:
+        from database.repositories.daily_lesson_repository import (
+            store_daily_lesson,
+        )
+
+        ok = await store_daily_lesson(
+            date=request.date,
+            subject=request.subject,
+            title=request.title,
+            content=request.content,
+            homework=request.homework,
+            notes=request.notes,
+        )
+
+        if not ok:
+            raise HTTPException(
+                status_code=503,
+                detail="Milvus is unavailable — could not store lesson",
+            )
+
+        return DailyLessonResponse(
+            success=True,
+            date=request.date,
+            subject=request.subject,
+            message=f"Lesson '{request.title}' for {request.subject} on {request.date} stored successfully",
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Daily lesson upload failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/daily-lessons/{date}")
+async def get_daily_lessons(date: str):
+    """
+    Retrieve all lessons for a specific date.
+
+    Args:
+        date: Date in ``YYYY-MM-DD`` format.
+
+    Returns:
+        List of lesson entries for that date.
+    """
+    try:
+        from database.repositories.daily_lesson_repository import (
+            get_lessons_by_date,
+        )
+
+        lessons = await get_lessons_by_date(date)
+        return {
+            "date": date,
+            "count": len(lessons),
+            "lessons": lessons,
+        }
+
+    except Exception as e:
+        logger.error(f"Daily lesson retrieval failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/daily-lesson/parse-image", response_model=ImageLessonResponse)
+async def parse_lesson_image(
+    file: UploadFile = File(...),
+    date: str = Form(""),
+    subject: str = Form(""),
+):
+    """
+    Upload a lesson image, parse it with Gemini 2.5 Pro, and store
+    the extracted content in the ``vinschool_daily_lessons`` Milvus
+    collection.
+
+    Accepts ``.jpg``, ``.jpeg``, or ``.png`` images.  Gemini reads
+    the image and returns structured fields (subject, title, content,
+    homework, notes) that are then embedded and inserted into Milvus.
+
+    Form fields:
+        file: The image file (required).
+        date: Lesson date in ``YYYY-MM-DD`` format (defaults to today).
+        subject: Optional subject hint to guide Gemini's parsing.
+
+    Returns:
+        The extracted lesson data along with a success flag.
+    """
+    # Validate file type
+    if file.content_type not in ("image/jpeg", "image/png"):
+        suffix = Path(file.filename or "").suffix.lower()
+        if suffix not in (".jpg", ".jpeg", ".png"):
+            raise HTTPException(
+                status_code=400,
+                detail="Only .jpg, .jpeg, and .png images are supported.",
+            )
+
+    image_bytes = await file.read()
+    if not image_bytes:
+        raise HTTPException(status_code=400, detail="Uploaded file is empty.")
+
+    # Determine MIME type
+    mime_type = file.content_type or "image/jpeg"
+    if mime_type not in ("image/jpeg", "image/png"):
+        mime_type = "image/jpeg"
+
+    # Default date to today
+    lesson_date = date.strip() if date.strip() else str(date_today.today())
+
+    try:
+        from utils.gemini_vision import parse_lesson_image as _parse_image
+
+        parsed = await _parse_image(
+            image_bytes=image_bytes,
+            mime_type=mime_type,
+            date_hint=lesson_date,
+            subject_hint=subject.strip(),
+        )
+    except (ValueError, RuntimeError) as exc:
+        logger.error(f"Image parsing failed: {exc}")
+        raise HTTPException(status_code=502, detail=str(exc))
+
+    # Store in Milvus
+    try:
+        from database.repositories.daily_lesson_repository import (
+            store_daily_lesson,
+        )
+
+        ok = await store_daily_lesson(
+            date=lesson_date,
+            subject=parsed["subject"],
+            title=parsed["title"],
+            content=parsed["content"],
+            homework=parsed["homework"],
+            notes=parsed["notes"],
+        )
+
+        if not ok:
+            raise HTTPException(
+                status_code=503,
+                detail="Milvus is unavailable — parsed content could not be stored.",
+            )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error(f"Milvus storage failed after parsing: {exc}")
+        raise HTTPException(status_code=500, detail=str(exc))
+
+    return ImageLessonResponse(
+        success=True,
+        date=lesson_date,
+        subject=parsed["subject"],
+        title=parsed["title"],
+        content=parsed["content"],
+        homework=parsed["homework"],
+        notes=parsed["notes"],
+        message=(
+            f"Lesson '{parsed['title']}' for {parsed['subject']} on "
+            f"{lesson_date} parsed and stored successfully."
+        ),
+    )

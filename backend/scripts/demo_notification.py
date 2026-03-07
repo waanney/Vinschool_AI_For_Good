@@ -2,13 +2,13 @@
 Demo script for NotificationService features.
 
 Usage (feature-based):
-    python scripts/demo_notification.py --escalation      # Teacher escalation: Email + Google Chat
-    python scripts/demo_notification.py --low-grade       # Low grade alert: Email to teacher
-    python scripts/demo_notification.py --daily-summary   # Daily summary: Google Chat to students
-    python scripts/demo_notification.py --daily-parent    # Daily summary: Zalo Clone UI to parents
-    python scripts/demo_notification.py --all             # Run all features
+    python -m scripts.demo_notification --escalation     # Teacher escalation: Email + Google Chat
+    python -m scripts.demo_notification --low-grade      # Low grade alert: Email to teacher
+    python -m scripts.demo_notification --daily-summary  # Daily summary: Google Chat to students
+    python -m scripts.demo_notification --daily-parent   # Daily summary: Zalo Clone UI to parents
+    python -m scripts.demo_notification --all            # Run all features
 
-    python scripts/demo_notification.py --dry-run         # Preview all without sending
+    python -m scripts.demo_notification --dry-run        # Preview all without sending
 """
 
 import asyncio
@@ -101,6 +101,7 @@ def get_service() -> NotificationService:
 # ===== Sample Data =====
 
 def get_sample_teacher(email_override: str | None = None) -> TeacherInfo:
+    """Return a sample teacher.  ``email_override`` may be comma-separated."""
     return TeacherInfo(
         teacher_id="demo-teacher-001",
         name="Co Van Anh",
@@ -157,9 +158,15 @@ async def demo_teacher_escalation():
     service = get_service()
     student = get_sample_student()
 
-    # Ask for teacher email
-    default_email = settings.SMTP_USERNAME or "teacher@vinschool.edu.vn"
-    test_email = input(f"  Teacher email to send to [{default_email}]: ").strip() or default_email
+    # Ask for teacher email(s) — supports comma-separated
+    default_email = settings.TEACHER_EMAIL or settings.SMTP_USERNAME or "teacher@vinschool.edu.vn"
+    test_email = (
+        input(f"  Teacher email(s) to send to (comma-separated) [{default_email}]: ").strip()
+        or default_email
+    )
+    num_recipients = len([e for e in test_email.split(",") if e.strip()])
+    if num_recipients > 1:
+        print(f"  -> Will deliver to {num_recipients} recipient(s)")
 
     teacher = get_sample_teacher(email_override=test_email)
 
@@ -211,8 +218,14 @@ async def demo_low_grade_alert():
     service = get_service()
     student = get_sample_student()
 
-    default_email = settings.SMTP_USERNAME or "teacher@vinschool.edu.vn"
-    test_email = input(f"  Teacher email to send to [{default_email}]: ").strip() or default_email
+    default_email = settings.TEACHER_EMAIL or settings.SMTP_USERNAME or "teacher@vinschool.edu.vn"
+    test_email = (
+        input(f"  Teacher email(s) to send to (comma-separated) [{default_email}]: ").strip()
+        or default_email
+    )
+    num_recipients = len([e for e in test_email.split(",") if e.strip()])
+    if num_recipients > 1:
+        print(f"  -> Will deliver to {num_recipients} recipient(s)")
 
     teacher = get_sample_teacher(email_override=test_email)
 
@@ -274,7 +287,7 @@ async def demo_daily_summary_students():
     print_notification_preview(notification)
 
     if settings.ENABLE_GOOGLE_CHAT_NOTIFICATIONS and (settings.GOOGLE_CHAT_WEBHOOK_URL or settings.GOOGLE_CHAT_SPACE_ID):
-        gchat_mode = "Chat API" if settings.GOOGLE_CHAT_SPACE_ID and settings.GOOGLE_APPLICATION_CREDENTIALS else "Webhook"
+        gchat_mode = "Chat API" if settings.GOOGLE_CHAT_SPACE_ID and settings.GOOGLE_CREDENTIALS_JSON else "Webhook"
         print(f"\n  Sending daily summary to Google Chat ({gchat_mode})...")
         results = await service.send(notification)
         print_results(results, "-> Google Chat space")
