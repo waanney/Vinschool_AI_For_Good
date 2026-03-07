@@ -157,6 +157,7 @@ class SubmissionResponse(BaseModel):
     score: float
     max_score: float
     feedback: str
+    detailed_feedback: str = ""
     attachment_paths: list[str]
     details: dict
     graded_at: str

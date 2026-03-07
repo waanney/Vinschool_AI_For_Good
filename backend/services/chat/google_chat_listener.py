@@ -519,6 +519,7 @@ class GoogleChatListener:
 
             score = grading_result.get("score", 0.0)
             feedback = grading_result.get("feedback", "")
+            detailed_feedback = grading_result.get("detailed_feedback", "")
             details = grading_result.get("details", {})
             grading_error = grading_result.get("error", None)
 
@@ -535,6 +536,7 @@ class GoogleChatListener:
                     "Cô Hana chưa thể đọc rõ bài tập trong ảnh.\n"
                     "Vui lòng chụp lại rõ hơn và gửi lại ạ."
                 )
+                detailed_feedback = ""
                 details = {}  # Clear error details
 
             submission = add_submission(
@@ -543,6 +545,7 @@ class GoogleChatListener:
                 score=score,
                 max_score=assignment.max_score,
                 feedback=feedback,
+                detailed_feedback=detailed_feedback,
                 attachment_paths=self._persist_images(
                     downloaded_paths
                 ),
