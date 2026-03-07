@@ -65,14 +65,14 @@ async def _generate_gemini_embeddings(texts: List[str]) -> List[List[float]]:
     
     for text in texts:
         result = genai.embed_content(
-            model="models/text-embedding-004",  # Latest model with configurable dimensions
+            model=settings.embedding_model,
             content=text,
             task_type="retrieval_document",
-            output_dimensionality=768,  # Match Milvus schema (768 instead of default 768)
+            output_dimensionality=settings.embedding_dimension,
         )
         embeddings.append(result['embedding'])
     
-    logger.info(f"Generated {len(embeddings)} embeddings using Gemini text-embedding-004 (768-dim)")
+    logger.info(f"Generated {len(embeddings)} embeddings using Gemini {settings.embedding_model} ({settings.embedding_dimension}-dim)")
     
     return embeddings
 

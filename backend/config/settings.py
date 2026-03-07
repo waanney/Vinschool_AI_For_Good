@@ -80,7 +80,7 @@ class Settings(BaseSettings):
 
     # Embedding Configuration
     embedding_provider: str = "google"  # openai or google
-    embedding_model: str = "models/text-embedding-004"
+    embedding_model: str = "gemini-embedding-001"
     embedding_dimension: int = 768  # text-embedding-004 with output_dimensionality=768
 
     # Agent Configuration
