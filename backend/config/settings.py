@@ -84,8 +84,8 @@ class Settings(BaseSettings):
     embedding_dimension: int = 768  # text-embedding-004 with output_dimensionality=768
 
     # Agent Configuration
-    default_llm_model: str = "gemini-2.5-flash"
-    grading_llm_model: str = "gemini-2.5-flash"
+    default_llm_model: str = "gemini-2.5-pro"
+    grading_llm_model: str = "gemini-2.5-pro"
     temperature: float = 0.7
     max_tokens: int = 2000
 

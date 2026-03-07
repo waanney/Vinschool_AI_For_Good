@@ -119,7 +119,7 @@ DEFAULT_LLM_MODEL=gpt-4-turbo-preview
 ```bash
 DEFAULT_PROVIDER=google
 GEMINI_API_KEY=your-gemini-key  # Get tại: https://aistudio.google.com/
-DEFAULT_LLM_MODEL=gemini-2.0-flash-exp
+DEFAULT_LLM_MODEL=gemini-2.5-pro
 ```
 
 ### Anthropic Claude
