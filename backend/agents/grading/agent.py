@@ -149,12 +149,20 @@ Maximum Score: {assignment.max_score}
 RUBRIC:
 {rubric_desc}
 
+GRADING METHOD:
+1. First, identify every question and sub-question in the image.
+2. For each one, determine whether the student's answer is CORRECT or INCORRECT.
+3. Count: total questions, correct answers, incorrect answers.
+4. Compute TOTAL_SCORE = (correct / total) * {assignment.max_score}, rounded to one decimal.
+5. Do NOT deduct points for handwriting quality, neatness, or missing working-out.
+6. Only deduct points when the final answer is wrong.
+
 IMPORTANT RULES:
 - Do NOT use any markdown formatting (no *, **, #, etc.)
 - Write all text in proper Vietnamese with full diacritical marks
-- The TOTAL_SCORE must be a number, grade fairly based on what you see
-- FEEDBACK: one concise sentence (max 100 chars) starting with "{short_name}", summarising how the student did. Write in proper Vietnamese with diacritical marks, for example: "{short_name} nắm khá chắc kiến thức phần cộng trừ phân số, nhưng cần cẩn thận hơn."
-- DETAILED_FEEDBACK: a paragraph (4-6 sentences) as Cô Hana speaking to the student. Write in proper Vietnamese with diacritical marks. Start with "Chào {short_name}" and sign off naturally. Be specific about which problems or sections are correct/incorrect. Do NOT invent information not visible in the image. Do NOT use "cô/thầy" — always say "Cô Hana".
+- The TOTAL_SCORE must be computed from correct/total as described above
+- FEEDBACK: one concise sentence (max 100 chars) starting with "{short_name}", summarising how the student did. Include the count like "đúng X/Y câu". Write in proper Vietnamese with diacritical marks.
+- DETAILED_FEEDBACK: a paragraph (4-6 sentences) as Cô Hana speaking to the student. Write in proper Vietnamese with diacritical marks. Start with "Chào {short_name}" and sign off naturally. List which specific questions are correct and which are incorrect. Do NOT invent information not visible in the image. Do NOT use "cô/thầy" — always say "Cô Hana".
 - Preserve the student's name exactly as given (keep or omit diacritical marks as provided; do NOT add diacritical marks to a name that was given without them).
 
 Please read the student's handwritten work from the image and grade it.
@@ -164,7 +172,7 @@ You MUST format your response EXACTLY as follows (keep section headers in UPPERC
 TOTAL_SCORE: [number out of {assignment.max_score}]
 
 FEEDBACK:
-[one short sentence in proper Vietnamese with diacritical marks, starting with "{short_name}", max 100 chars]
+[one short sentence in proper Vietnamese with diacritical marks, starting with "{short_name}", include correct/total count, max 100 chars]
 
 DETAILED_FEEDBACK:
 [paragraph from Cô Hana to the student, 4-6 sentences, proper Vietnamese with diacritical marks]
@@ -204,10 +212,18 @@ RUBRIC:
 STUDENT SUBMISSION:
 {submission_text}
 
+GRADING METHOD:
+1. Identify every question and sub-question in the submission.
+2. For each one, determine whether the student's answer is CORRECT or INCORRECT.
+3. Count: total questions, correct answers, incorrect answers.
+4. Compute TOTAL_SCORE = (correct / total) * {assignment.max_score}, rounded to one decimal.
+5. Do NOT deduct points for presentation, neatness, or missing working-out.
+6. Only deduct points when the final answer is wrong.
+
 IMPORTANT RULES:
 - Do NOT use any markdown formatting (no *, **, #, etc.)
 - Write all text in proper Vietnamese with full diacritical marks
-- FEEDBACK: one concise sentence (max 100 chars) starting with "{short_name}". Write in proper Vietnamese with diacritical marks.
+- FEEDBACK: one concise sentence (max 100 chars) starting with "{short_name}". Include the count like "đúng X/Y câu". Write in proper Vietnamese with diacritical marks.
 - DETAILED_FEEDBACK: a paragraph (4-6 sentences) as Cô Hana speaking to the student. Write in proper Vietnamese with diacritical marks.
 - Preserve the student's name exactly as given (do NOT add diacritical marks to a name given without them)
 
@@ -219,7 +235,7 @@ CRITERION_SCORES:
 TOTAL_SCORE: [score]
 
 FEEDBACK:
-[one short sentence in proper Vietnamese with diacritical marks, starting with "{short_name}", max 100 chars]
+[one short sentence in proper Vietnamese with diacritical marks, starting with "{short_name}", include correct/total count, max 100 chars]
 
 DETAILED_FEEDBACK:
 [paragraph from Cô Hana, 4-6 sentences, proper Vietnamese with diacritical marks]

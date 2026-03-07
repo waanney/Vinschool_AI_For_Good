@@ -168,18 +168,8 @@ class HomeworkGradingWorkflow:
             "Mathematics:homework": [
                 GradingCriteria(
                     criteria_name="Correctness",
-                    max_points=60,
-                    description="Accuracy of answers and calculations",
-                ),
-                GradingCriteria(
-                    criteria_name="Work Shown",
-                    max_points=20,
-                    description="Clear demonstration of problem-solving process",
-                ),
-                GradingCriteria(
-                    criteria_name="Presentation",
-                    max_points=20,
-                    description="Neatness and organization of work",
+                    max_points=100,
+                    description="Percentage of answers that are correct. Count the total number of questions/sub-questions, count how many are answered correctly, and compute score = (correct / total) * max_score. Do NOT deduct points for presentation, neatness, or missing work-shown.",
                 ),
             ],
             "English:essay": [
