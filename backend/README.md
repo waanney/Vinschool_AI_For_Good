@@ -359,7 +359,7 @@ MILVUS_TOKEN=your-zilliz-api-token
 MILVUS_HOST=localhost
 MILVUS_PORT=19530
 # Shared
-MILVUS_COLLECTION_PREFIX=vinschool   # Two collections: vinschool_documents, vinschool_grading_results
+MILVUS_COLLECTION_PREFIX=vinschool   # 4 collections: vinschool_documents, vinschool_grading_results, vinschool_student_profiles, vinschool_daily_lessons
 
 # LLM
 DEFAULT_PROVIDER=google              # openai, google, or anthropic
@@ -487,6 +487,20 @@ The Zalo channel stores plain-text messages in-memory; the frontend polls `GET /
 | `POST` | `/api/teacher/submissions/{id}/view` | Mark a submission as viewed by teacher                       |
 | `GET`  | `/uploads/submissions/{file}`        | Serve submitted homework images (static mount)               |
 
+**Student profile API endpoints:**
+
+| Method | Endpoint                            | Description                                           |
+| ------ | ----------------------------------- | ----------------------------------------------------- |
+| `POST` | `/api/student/profile`              | Create or update a student profile in Milvus (upsert) |
+| `GET`  | `/api/student/profile/{student_id}` | Retrieve a student profile by student_id              |
+
+**Daily lesson API endpoints:**
+
+| Method | Endpoint                            | Description                              |
+| ------ | ----------------------------------- | ---------------------------------------- |
+| `POST` | `/api/teacher/daily-lesson`         | Upload a daily lesson entry to Milvus    |
+| `GET`  | `/api/teacher/daily-lessons/{date}` | Retrieve all lessons for a specific date |
+
 > **Note:** Zalo uses an in-memory store — messages are lost when the server restarts. For production, replace with Zalo OA API integration. Submissions also use an in-memory store for the demo. Uploaded images are persisted in `uploads/submissions/` and served as static files at `/uploads/`.
 
 #### Notification Demos
@@ -559,10 +573,12 @@ Students use `/ask`, `/dailysum`, or `/demosum` when @mentioning the bot. Run th
 cd backend && python -m scripts.run_google_chat
 ```
 
-The bot responds to `/ask`, `/grade`, `/dailysum`, `/demosum`, and `/help` prefixes. For example:
+The bot responds to `/ask`, `/grade`, `/hw`, `/dailysum`, `/demosum`, and `/help` prefixes. For example:
 
 - `@Vinschool Bot /ask Hôm nay học bài gì?`
 - `@Vinschool Bot /grade` (attach homework images)
+- `@Vinschool Bot /hw` (suggest supplementary homework based on profile)
+- `@Vinschool Bot /hw Toán` (suggest homework for a specific subject)
 - `@Vinschool Bot /dailysum`
 - `@Vinschool Bot /demosum`
 - `@Vinschool Bot /help`
@@ -570,6 +586,18 @@ The bot responds to `/ask`, `/grade`, `/dailysum`, `/demosum`, and `/help` prefi
 The `/grade` command accepts attached images, grades them using Gemini Vision API, persists the images in `uploads/submissions/`, stores the result in the LMS dashboard, stores the grading result in Milvus (for later `/ask` retrieval), and sends a low-grade alert email if the score is below `LOW_GRADE_THRESHOLD`. All timestamps are stored in UTC with timezone info so the LMS displays the correct local time.
 
 After grading, if the same student uses `/ask` to ask about their score or feedback, Cô Hana retrieves the relevant grading results from Milvus and answers with actual data (score, feedback, strengths, improvements).
+
+The `/hw` command generates personalised supplementary homework suggestions based on the student's Milvus profile (strengths, weaknesses, subjects, learning level) and recent grading results. Student profiles are stored in the `vinschool_student_profiles` collection and can be created via the `POST /api/student/profile` endpoint or seeded using:
+
+```bash
+cd backend && python -m scripts.seed_student_profiles
+```
+
+The `/dailysum` and `/ask` commands use lesson content from the `vinschool_daily_lessons` Milvus collection. If the collection is empty, they fall back to reading `data/lesson.txt`. To populate the collection from the lesson file:
+
+```bash
+cd backend && python -m scripts.seed_daily_lessons
+```
 
 Every command returns a single reply — no intermediate typing indicators.
 
