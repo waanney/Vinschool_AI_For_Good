@@ -3,7 +3,14 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import UploadButton from "./UploadButton";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
+
+/** Score color based on thresholds from backend. */
+function scoreColor(score: number, maxScore: number, lowGradeThreshold: number): string {
+  if (score < maxScore / 2) return 'text-red-500';
+  if (score >= lowGradeThreshold) return 'text-green-600';
+  return 'text-orange-500';
+}
 
 interface Submission {
   id: string;
@@ -55,6 +62,7 @@ export default function TeacherHomeworkTable({ userName }: { userName: string })
   // --- API SUBMISSIONS (from /grade Google Chat command) ---
   const [apiSubmissions, setApiSubmissions] = useState<Submission[]>([]);
   const [unviewedCount, setUnviewedCount] = useState(0);
+  const [lowGradeThreshold, setLowGradeThreshold] = useState(7.0);
   const [selectedSubmission, setSelectedSubmission] = useState<Submission | null>(null);
   const [selectedStaticStudent, setSelectedStaticStudent] = useState<any>(null);
 
@@ -66,6 +74,7 @@ export default function TeacherHomeworkTable({ userName }: { userName: string })
         const data = await res.json();
         setApiSubmissions(data.submissions || []);
         setUnviewedCount(data.unviewed_count || 0);
+        if (data.low_grade_threshold != null) setLowGradeThreshold(data.low_grade_threshold);
       }
     } catch {
       // Backend may not be running — silently ignore
@@ -282,12 +291,12 @@ export default function TeacherHomeworkTable({ userName }: { userName: string })
                         <tr key={sub.id} onClick={() => { if (!sub.is_viewed) markSubmissionViewed(sub.id); }} className={`border-b border-slate-100 cursor-pointer transition-colors duration-300 ${sub.is_viewed ? 'bg-white' : 'bg-[#f3f4f6]'}`}>
                           <td className="p-3 text-center font-bold border-r border-slate-100 text-slate-800">{idx + 1}</td>
                           <td className="p-3 font-bold border-r border-slate-100 text-slate-700">{sub.student_name}</td>
-                          <td className={`p-3 text-center border-r border-slate-100 font-bold ${sub.score < 5 ? 'text-red-500' : sub.score >= 7 ? 'text-green-600' : 'text-orange-500'}`}>{sub.score.toFixed(1)}/{sub.max_score.toFixed(1)}</td>
-                          <td className="p-3 text-center border-r border-slate-100 text-slate-500 font-medium">{new Date(sub.graded_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</td>
+                          <td className={`p-3 text-center border-r border-slate-100 font-bold ${scoreColor(sub.score, sub.max_score, lowGradeThreshold)}`}>{sub.score.toFixed(1)}/{sub.max_score.toFixed(1)}</td>
+                          <td className="p-3 text-center border-r border-slate-100 text-slate-500 font-medium">{new Date(sub.graded_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'Asia/Ho_Chi_Minh' })}</td>
                           <td className="p-3 border-r italic text-slate-600 leading-relaxed">{sub.feedback || '-'}</td>
                           <td className="p-3 border-r border-slate-100 text-center">{sub.attachment_paths && sub.attachment_paths.length > 0 ? (
                             <div onClick={(e) => { e.stopPropagation(); setSelectedSubmission(sub); }} className="w-8 h-10 mx-auto border border-slate-200 bg-white shadow-sm overflow-hidden cursor-pointer hover:ring-2 hover:ring-blue-400 transition-all">
-                              <img src={`${API_BASE}/uploads/${sub.attachment_paths[0].split(/[/\\]/).pop()}`} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).src = '/BaiTapHS1_Demo.jpg'; }} />
+                              <img src={`${API_BASE}/uploads/${sub.attachment_paths[0]}`} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).src = '/BaiTapHS1_Demo.jpg'; }} />
                             </div>
                           ) : (
                             <button onClick={(e) => { e.stopPropagation(); setSelectedSubmission(sub); }} className="text-blue-600 underline text-[11px] font-medium hover:text-blue-800">Xem bài</button>
@@ -298,7 +307,7 @@ export default function TeacherHomeworkTable({ userName }: { userName: string })
                         <tr key={s.stt} onClick={() => !viewedStudentIds.includes(s.stt) && setViewedStudentIds([...viewedStudentIds, s.stt])} className={`border-b border-slate-100 cursor-pointer transition-colors duration-300 ${viewedStudentIds.includes(s.stt) ? 'bg-white' : 'bg-[#f3f4f6]'}`}>
                           <td className="p-3 text-center font-bold border-r border-slate-100 text-slate-800">{apiSubmissions.length + s.stt}</td>
                           <td className="p-3 font-bold border-r border-slate-100 text-slate-700">{s.name}</td>
-                          <td className={`p-3 text-center border-r border-slate-100 font-bold ${s.score < 5 ? 'text-red-500' : s.score >= 7 ? 'text-green-600' : 'text-orange-500'}`}>{s.score.toFixed(1)}/{s.maxScore.toFixed(1)}</td>
+                          <td className={`p-3 text-center border-r border-slate-100 font-bold ${scoreColor(s.score, s.maxScore, lowGradeThreshold)}`}>{s.score.toFixed(1)}/{s.maxScore.toFixed(1)}</td>
                           <td className="p-3 text-center border-r border-slate-100 text-slate-500 font-medium">{s.subTimeShort}</td>
                           <td className="p-3 border-r italic text-slate-600 leading-relaxed">{s.comment}</td>
                           <td className="p-3 border-r border-slate-100 text-center">
@@ -321,13 +330,13 @@ export default function TeacherHomeworkTable({ userName }: { userName: string })
                         <button onClick={() => setSelectedSubmission(null)} className="text-slate-400 hover:text-slate-600 text-2xl font-light">&times;</button>
                       </div>
                       <div className="grid grid-cols-2 gap-3 mb-4 text-sm">
-                        <div className="bg-slate-50 rounded-lg p-3"><span className="text-slate-500">Điểm:</span> <span className={`font-bold ${selectedSubmission.score < 5 ? 'text-red-500' : selectedSubmission.score >= 7 ? 'text-green-600' : 'text-orange-500'}`}>{selectedSubmission.score.toFixed(1)}/{selectedSubmission.max_score.toFixed(1)}</span></div>
-                        <div className="bg-slate-50 rounded-lg p-3"><span className="text-slate-500">Thời gian:</span> <span className="font-medium">{new Date(selectedSubmission.graded_at).toLocaleString('vi-VN')}</span></div>
+                        <div className="bg-slate-50 rounded-lg p-3"><span className="text-slate-500">Điểm:</span> <span className={`font-bold ${scoreColor(selectedSubmission.score, selectedSubmission.max_score, lowGradeThreshold)}`}>{selectedSubmission.score.toFixed(1)}/{selectedSubmission.max_score.toFixed(1)}</span></div>
+                        <div className="bg-slate-50 rounded-lg p-3"><span className="text-slate-500">Thời gian:</span> <span className="font-medium">{new Date(selectedSubmission.graded_at).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}</span></div>
                       </div>
                       {selectedSubmission.feedback && <div className="mb-4"><h4 className="text-sm font-bold text-slate-700 mb-2">Nhận xét:</h4><p className="text-sm text-slate-600 bg-blue-50 rounded-lg p-3 leading-relaxed">{selectedSubmission.feedback}</p></div>}
                       {(selectedSubmission.details?.strengths || []).length > 0 && <div className="mb-4"><h4 className="text-sm font-bold text-green-700 mb-2">Điểm mạnh:</h4><ul className="text-sm text-slate-600 space-y-1">{selectedSubmission.details.strengths.map((s: string, i: number) => <li key={i} className="bg-green-50 rounded-lg px-3 py-2">✓ {s}</li>)}</ul></div>}
                       {(selectedSubmission.details?.improvements || []).length > 0 && <div className="mb-4"><h4 className="text-sm font-bold text-orange-600 mb-2">Cần cải thiện:</h4><ul className="text-sm text-slate-600 space-y-1">{selectedSubmission.details.improvements.map((s: string, i: number) => <li key={i} className="bg-orange-50 rounded-lg px-3 py-2">→ {s}</li>)}</ul></div>}
-                      {selectedSubmission.attachment_paths && selectedSubmission.attachment_paths.length > 0 && <div><h4 className="text-sm font-bold text-slate-700 mb-2">Ảnh bài tập đã nộp:</h4><div className="grid grid-cols-3 gap-4">{selectedSubmission.attachment_paths.map((p: string, i: number) => <div key={i} className="w-full aspect-[3/4] border shadow-md bg-white overflow-hidden"><img src={`${API_BASE}/uploads/${p.split(/[/\\]/).pop()}`} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).src = '/BaiTapHS1_Demo.jpg'; }} /></div>)}</div></div>}
+                      {selectedSubmission.attachment_paths && selectedSubmission.attachment_paths.length > 0 && <div><h4 className="text-sm font-bold text-slate-700 mb-2">Ảnh bài tập đã nộp:</h4><div className="grid grid-cols-3 gap-4">{selectedSubmission.attachment_paths.map((p: string, i: number) => <div key={i} className="w-full aspect-[3/4] border shadow-md bg-white overflow-hidden"><img src={`${API_BASE}/uploads/${p}`} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).src = '/BaiTapHS1_Demo.jpg'; }} /></div>)}</div></div>}
                     </div>
                   </div>
                 )}
@@ -340,7 +349,7 @@ export default function TeacherHomeworkTable({ userName }: { userName: string })
                         <button onClick={() => setSelectedStaticStudent(null)} className="text-slate-400 hover:text-slate-600 text-2xl font-light">&times;</button>
                       </div>
                       <div className="grid grid-cols-2 gap-3 mb-4 text-sm">
-                        <div className="bg-slate-50 rounded-lg p-3"><span className="text-slate-500">Điểm:</span> <span className={`font-bold ${selectedStaticStudent.score < 5 ? 'text-red-500' : selectedStaticStudent.score >= 7 ? 'text-green-600' : 'text-orange-500'}`}>{selectedStaticStudent.score.toFixed(1)}/{selectedStaticStudent.maxScore.toFixed(1)}</span></div>
+                        <div className="bg-slate-50 rounded-lg p-3"><span className="text-slate-500">Điểm:</span> <span className={`font-bold ${scoreColor(selectedStaticStudent.score, selectedStaticStudent.maxScore, lowGradeThreshold)}`}>{selectedStaticStudent.score.toFixed(1)}/{selectedStaticStudent.maxScore.toFixed(1)}</span></div>
                         <div className="bg-slate-50 rounded-lg p-3"><span className="text-slate-500">Thời gian:</span> <span className="font-medium">{selectedStaticStudent.subTime}</span></div>
                       </div>
                       <div className="mb-4"><h4 className="text-sm font-bold text-slate-700 mb-2">Nhận xét:</h4><p className="text-sm text-slate-600 bg-blue-50 rounded-lg p-3 leading-relaxed">{selectedStaticStudent.comment}</p></div>
