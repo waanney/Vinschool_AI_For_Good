@@ -49,21 +49,22 @@ class TeachingAssistantAgent(BaseAgent):
     - Provide feedback and recommendations
     """
     
-    SYSTEM_PROMPT = """You are an intelligent teaching assistant for Vinschool.
+    SYSTEM_PROMPT = """You are Cô Hana, an intelligent teaching assistant for Vinschool.
 Your role is to help students learn effectively by:
-1. Answering questions clearly and accurately using provided context
-2. Explaining concepts in an age-appropriate manner
+1. Answering questions clearly and accurately — using course materials when available, or your own broad educational knowledge when needed
+2. Explaining concepts in an age-appropriate manner suitable for primary-school students
 3. Providing examples and practice problems
 4. Encouraging critical thinking
 
 When answering questions:
-- Use the provided context from course materials
-- If uncertain or context is insufficient, recommend escalating to the teacher
+- Prioritise information from the provided course-material context when it is relevant
+- If the context does not cover the question, answer from your general knowledge of the subject (Mathematics, Vietnamese, Science, History, Geography, English, etc.)
+- Only recommend escalating to the teacher when the question is entirely outside the scope of education/learning
 - Be supportive and encouraging
 - Use Vietnamese language when appropriate
-- Cite your sources when possible
+- Cite course-material sources when you use them
 
-Always prioritize student understanding and learning outcomes."""
+Always prioritise student understanding and learning outcomes."""
     
     def __init__(self, config: Optional[AgentConfig] = None):
         super().__init__(config)
@@ -98,25 +99,22 @@ Always prioritize student understanding and learning outcomes."""
             
             # Prepare context from search results
             if not search_results:
-                logger.warning(f"No relevant context found for question: {context.question[:100]}")
-                return AnswerResponse(
-                    answer="Xin lỗi, tôi không tìm thấy thông tin liên quan trong tài liệu học tập. Hãy hỏi giáo viên nhé!",
-                    confidence=0.0,
-                    escalate_to_teacher=True,
-                    reasoning="No relevant documents found in knowledge base",
-                )
-            
-            # Build context string
-            context_texts = []
-            sources = []
-            for i, result in enumerate(search_results, 1):
-                context_texts.append(f"[Context {i}]: {result['text']}")
-                sources.append(result['metadata'].get('title', 'Unknown'))
-            
-            context_str = "\n\n".join(context_texts)
-            
-            # Calculate confidence based on search scores
-            avg_score = sum(r['score'] for r in search_results) / len(search_results)
+                logger.info(f"No course-material context found for question, answering from general knowledge: {context.question[:100]}")
+                context_str = "(No specific course-material context found — answer from your general educational knowledge.)"
+                sources = []
+                avg_score = 1.0  # answering from own knowledge; do not escalate
+            else:
+                # Build context string
+                context_texts = []
+                sources = []
+                for i, result in enumerate(search_results, 1):
+                    context_texts.append(f"[Context {i}]: {result['text']}")
+                    sources.append(result['metadata'].get('title', 'Unknown'))
+
+                context_str = "\n\n".join(context_texts)
+
+                # Calculate confidence based on search scores
+                avg_score = sum(r['score'] for r in search_results) / len(search_results)
             
             # Build prompt
             prompt = f"""Question from student (Grade {context.grade}, Subject: {context.subject}):
@@ -125,7 +123,7 @@ Always prioritize student understanding and learning outcomes."""
 Relevant context from course materials:
 {context_str}
 
-Please provide a clear, helpful answer based on the context above. If the context doesn't contain enough information to answer confidently, say so."""
+Answer the question clearly and helpfully. Use the course-material context above when it is relevant. If the context does not fully cover the question, supplement with your own educational knowledge about the subject to give a complete, accurate answer."""
             
             # Run agent
             result = await self._agent.run(prompt)
