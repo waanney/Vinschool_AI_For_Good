@@ -21,6 +21,7 @@ interface Submission {
   score: number;
   max_score: number;
   feedback: string;
+  detailed_feedback?: string;
   attachment_paths: string[];
   details: Record<string, any>;
   graded_at: string;
@@ -333,10 +334,10 @@ export default function TeacherHomeworkTable({ userName }: { userName: string })
                         <div className="bg-slate-50 rounded-lg p-3"><span className="text-slate-500">Điểm:</span> <span className={`font-bold ${scoreColor(selectedSubmission.score, selectedSubmission.max_score, lowGradeThreshold)}`}>{selectedSubmission.score.toFixed(1)}/{selectedSubmission.max_score.toFixed(1)}</span></div>
                         <div className="bg-slate-50 rounded-lg p-3"><span className="text-slate-500">Thời gian:</span> <span className="font-medium">{new Date(selectedSubmission.graded_at).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}</span></div>
                       </div>
-                      {selectedSubmission.feedback && <div className="mb-4"><h4 className="text-sm font-bold text-slate-700 mb-2">Nhận xét:</h4><p className="text-sm text-slate-600 bg-blue-50 rounded-lg p-3 leading-relaxed">{selectedSubmission.feedback}</p></div>}
+                      {(selectedSubmission.detailed_feedback || selectedSubmission.feedback) && <div className="mb-4"><h4 className="text-sm font-bold text-slate-700 mb-2">Nhận xét từ Cô Hana:</h4><p className="text-sm text-slate-600 bg-blue-50 rounded-lg p-3 leading-relaxed whitespace-pre-line">{selectedSubmission.detailed_feedback || selectedSubmission.feedback}</p></div>}
                       {(selectedSubmission.details?.strengths || []).length > 0 && <div className="mb-4"><h4 className="text-sm font-bold text-green-700 mb-2">Điểm mạnh:</h4><ul className="text-sm text-slate-600 space-y-1">{selectedSubmission.details.strengths.map((s: string, i: number) => <li key={i} className="bg-green-50 rounded-lg px-3 py-2">✓ {s}</li>)}</ul></div>}
                       {(selectedSubmission.details?.improvements || []).length > 0 && <div className="mb-4"><h4 className="text-sm font-bold text-orange-600 mb-2">Cần cải thiện:</h4><ul className="text-sm text-slate-600 space-y-1">{selectedSubmission.details.improvements.map((s: string, i: number) => <li key={i} className="bg-orange-50 rounded-lg px-3 py-2">→ {s}</li>)}</ul></div>}
-                      {selectedSubmission.attachment_paths && selectedSubmission.attachment_paths.length > 0 && <div><h4 className="text-sm font-bold text-slate-700 mb-2">Ảnh bài tập đã nộp:</h4><div className="grid grid-cols-3 gap-4">{selectedSubmission.attachment_paths.map((p: string, i: number) => <div key={i} className="w-full aspect-[3/4] border shadow-md bg-white overflow-hidden"><img src={`${API_BASE}/uploads/${p}`} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).src = '/BaiTapHS1_Demo.jpg'; }} /></div>)}</div></div>}
+                      {selectedSubmission.attachment_paths && selectedSubmission.attachment_paths.length > 0 && <div><h4 className="text-sm font-bold text-slate-700 mb-2">Ảnh bài tập đã nộp:</h4><div className="grid grid-cols-3 gap-4">{selectedSubmission.attachment_paths.map((p: string, i: number) => <div key={i} className="w-full aspect-3/4 border shadow-md bg-white overflow-hidden"><img src={`${API_BASE}/uploads/${p}`} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).src = '/BaiTapHS1_Demo.jpg'; }} /></div>)}</div></div>}
                     </div>
                   </div>
                 )}
@@ -355,7 +356,7 @@ export default function TeacherHomeworkTable({ userName }: { userName: string })
                       <div className="mb-4"><h4 className="text-sm font-bold text-slate-700 mb-2">Nhận xét:</h4><p className="text-sm text-slate-600 bg-blue-50 rounded-lg p-3 leading-relaxed">{selectedStaticStudent.comment}</p></div>
                       {selectedStaticStudent.strengths.length > 0 && <div className="mb-4"><h4 className="text-sm font-bold text-green-700 mb-2">Điểm mạnh:</h4><ul className="text-sm text-slate-600 space-y-1">{selectedStaticStudent.strengths.map((s: string, i: number) => <li key={i} className="bg-green-50 rounded-lg px-3 py-2">✓ {s}</li>)}</ul></div>}
                       {selectedStaticStudent.improvements.length > 0 && <div className="mb-4"><h4 className="text-sm font-bold text-orange-600 mb-2">Cần cải thiện:</h4><ul className="text-sm text-slate-600 space-y-1">{selectedStaticStudent.improvements.map((s: string, i: number) => <li key={i} className="bg-orange-50 rounded-lg px-3 py-2">→ {s}</li>)}</ul></div>}
-                      <div><h4 className="text-sm font-bold text-slate-700 mb-2">Ảnh bài tập đã nộp:</h4><div className="grid grid-cols-3 gap-4">{selectedStaticStudent.images.map((img: string, i: number) => <div key={i} className="w-full aspect-[3/4] border shadow-md bg-white overflow-hidden"><img src={img} className="w-full h-full object-cover" /></div>)}</div></div>
+                      <div><h4 className="text-sm font-bold text-slate-700 mb-2">Ảnh bài tập đã nộp:</h4><div className="grid grid-cols-3 gap-4">{selectedStaticStudent.images.map((img: string, i: number) => <div key={i} className="w-full aspect-3/4 border shadow-md bg-white overflow-hidden"><img src={img} className="w-full h-full object-cover" /></div>)}</div></div>
                     </div>
                   </div>
                 )}
