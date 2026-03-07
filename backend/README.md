@@ -25,6 +25,7 @@ Multi-agent AI system for educational support built with PydanticAI, Milvus, and
 - **Two-Tier Feedback**: Concise feedback (≤100 chars, for Google Chat reply & LMS table) and detailed feedback (4-6 sentence paragraph from Cô Hana, for email & LMS detail modal)
 - **Cô Hana Persona**: AI always speaks as "Cô Hana"
 - **Vietnamese Name Convention**: Uses last 2 words of student's full name; preserves diacritical marks exactly as received
+- **Milvus Grading Storage**: After grading, results (score, feedback, strengths, improvements) are stored in Milvus so students can later `/ask` about their grades
 - **Teacher Override**: Teachers can review and adjust AI grades
 
 ### Notification Service
@@ -47,6 +48,7 @@ Multi-agent AI system for educational support built with PydanticAI, Milvus, and
 - **Message Debouncing**: Rapid messages from the same user are batched (3s quiet window) into a single AI request
 - **Conversation History**: Per-user history (last 10 messages) for contextual follow-ups
 - **Smart Escalation**: Zalo → polite apology only; Google Chat → email to teacher + student notification
+- **Grading Context Retrieval**: When a student `/ask`s about their grades, Milvus is queried for relevant grading results which are injected into the LLM prompt so Cô Hana can answer with actual score, feedback, strengths, and improvements
 - **Lesson Context**: AI answers are grounded in lesson data — reads from **Milvus** in production, falls back to `data/lesson.txt` for local development
 
 ## Architecture
@@ -95,10 +97,10 @@ Multi-agent AI system for educational support built with PydanticAI, Milvus, and
 │  └──────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────┘
                           │
-┌──────────────────────┬──────────────────────────────┐
-│    Milvus Vector DB  │    PostgreSQL Database       │
-│  (Document Embeddings)│  (Student, Teacher, etc.)   │
-└──────────────────────┴──────────────────────────────┘
+┌───────────────────────┬─────────────────────────────┐
+│    Milvus Vector DB   │    PostgreSQL Database      │
+│ (Documents + Grading) │  (Student, Teacher, etc.)   │
+└───────────────────────┴─────────────────────────────┘
 ```
 
 ## Quick Start
@@ -173,8 +175,11 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 # Install dependencies
 uv pip install -e .[dev]
 
-# Start Milvus and PostgreSQL
+# Option A: Local Milvus + PostgreSQL via Docker
 docker-compose up -d milvus postgres
+
+# Option B: Cloud services (Zilliz Cloud + Render PostgreSQL)
+# Set MILVUS_URI, MILVUS_TOKEN, DATABASE_URL in .env — no Docker needed
 
 # Run development server
 uvicorn api.main:app --reload
@@ -184,7 +189,10 @@ uvicorn api.main:app --reload
 
 ```bash
 pip install -e .[dev]
+
+# Start Milvus and PostgreSQL (or use cloud services via .env)
 docker-compose up -d milvus postgres
+
 uvicorn api.main:app --reload
 ```
 
@@ -243,17 +251,19 @@ backend/
 │   ├── milvus_client.py     # Milvus vector DB
 │   ├── postgres_client.py   # PostgreSQL
 │   └── repositories/        # Data access layer
+│       ├── document_repository.py   # Document storage
+│       └── grading_repository.py    # Grading results → Milvus
 ├── domain/                  # Domain models (DDD)
 │   ├── models/              # Entities
 │   └── repositories/        # Repository interfaces
-├── services/                        # Business services
-│   ├── chat/                        # Interactive AI chat (Cô Hana)
+├── services/                # Business services
+│   ├── chat/                # Interactive AI chat (Cô Hana)
 │   │   ├── chat_service.py          # Channel-aware LLM orchestrator
 │   │   ├── debouncer.py             # Per-user message debouncing
 │   │   ├── google_chat_listener.py  # Pub/Sub consumer + Chat API replier
 │   │   └── submission_store.py      # In-memory store for /grade submissions
-│   ├── scheduler.py                 # 6pm daily summary scheduler + /dailysum trigger
-│   └── notification/                # Notification service
+│   ├── scheduler.py         # 6pm daily summary scheduler + /dailysum trigger
+│   └── notification/        # Notification service
 │       ├── models.py                # Notification data models
 │       ├── base.py                  # BaseNotifier interface
 │       ├── email_notifier.py        # SMTP email (escalation + low grade)
@@ -328,19 +338,39 @@ GRADING_LLM_MODEL=claude-3-opus-20240229
 Key environment variables:
 
 ```bash
-# Database
+# Database — pick ONE option:
+# Option A: Full DATABASE_URL (Render, Heroku, Neon, etc.)
+#   When set, individual POSTGRES_* vars are ignored for connections.
+#   For Render: use the EXTERNAL hostname (dpg-xxx-a.region.render.com).
+#   The internal hostname (dpg-xxx-a) is only reachable from inside Render.
+DATABASE_URL=postgresql://user:password@dpg-xxx-a.oregon-postgres.render.com/vinschool_ai
+# Option B: Individual vars (local Docker Compose — default)
 POSTGRES_HOST=localhost
+POSTGRES_PORT=5432
 POSTGRES_DB=vinschool_ai
 POSTGRES_USER=vinschool
 POSTGRES_PASSWORD=your_password
 
-# Milvus
+# Milvus — pick ONE option:
+# Option A: Zilliz Cloud (managed Milvus)
+MILVUS_URI=https://your-cluster.serverless.gcp-us-west1.cloud.zilliz.com
+MILVUS_TOKEN=your-zilliz-api-token
+# Option B: Local Milvus (Docker Compose — default)
 MILVUS_HOST=localhost
 MILVUS_PORT=19530
+# Shared
+MILVUS_COLLECTION_PREFIX=vinschool   # Two collections: vinschool_documents, vinschool_grading_results
 
 # LLM
-OPENAI_API_KEY=your_openai_key
-DEFAULT_LLM_MODEL=gpt-4-turbo-preview
+DEFAULT_PROVIDER=google              # openai, google, or anthropic
+GEMINI_API_KEY=your_gemini_key
+DEFAULT_LLM_MODEL=gemini-2.5-flash
+GRADING_LLM_MODEL=gemini-2.5-flash
+
+# Embeddings
+EMBEDDING_PROVIDER=google
+EMBEDDING_MODEL=gemini-embedding-001
+EMBEDDING_DIMENSION=768
 
 # Workflows
 ENABLE_AUTO_GRADING=true
@@ -537,7 +567,9 @@ The bot responds to `/ask`, `/grade`, `/dailysum`, `/demosum`, and `/help` prefi
 - `@Vinschool Bot /demosum`
 - `@Vinschool Bot /help`
 
-The `/grade` command accepts attached images, grades them using Gemini Vision API, persists the images in `uploads/submissions/`, stores the result in the LMS dashboard, and sends a low-grade alert email if the score is below `LOW_GRADE_THRESHOLD`. All timestamps are stored in UTC with timezone info so the LMS displays the correct local time.
+The `/grade` command accepts attached images, grades them using Gemini Vision API, persists the images in `uploads/submissions/`, stores the result in the LMS dashboard, stores the grading result in Milvus (for later `/ask` retrieval), and sends a low-grade alert email if the score is below `LOW_GRADE_THRESHOLD`. All timestamps are stored in UTC with timezone info so the LMS displays the correct local time.
+
+After grading, if the same student uses `/ask` to ask about their score or feedback, Cô Hana retrieves the relevant grading results from Milvus and answers with actual data (score, feedback, strengths, improvements).
 
 Every command returns a single reply — no intermediate typing indicators.
 
