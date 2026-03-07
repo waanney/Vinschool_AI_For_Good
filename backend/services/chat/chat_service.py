@@ -12,6 +12,8 @@ Two channels are supported, each with its own persona and behaviour:
 - **gchat**: AI ↔ students.  Uses friendly student-facing Vietnamese.
   When the LLM is not confident an escalation email is sent to the
   homeroom teacher *and* the student is told the question was forwarded.
+  When a student asks about their grades, Milvus is queried for recent
+  grading results and the context is injected into the LLM prompt.
 
 Architecture:
     Platform (Zalo / Google Chat)
@@ -109,6 +111,7 @@ Bạn là Cô Hana - trợ lý AI thông minh của Vinschool, hỗ trợ học 
 
 Nhiệm vụ:
 - Trả lời câu hỏi về bài học, bài tập, lịch học dựa trên tài liệu được cung cấp
+- Trả lời câu hỏi về điểm số, nhận xét, kết quả chấm bài nếu có kết quả chấm bài trong ngữ cảnh
 - Giải thích kiến thức phù hợp với học sinh lớp 4
 - Luôn thân thiện, dễ hiểu, dùng ngôn ngữ phù hợp với học sinh
 - Xưng "cô", gọi học sinh là "con" hoặc "các con"
@@ -132,14 +135,16 @@ Tài liệu học tập hiện tại:
 {lesson_context}
 
 Quy tắc:
-1. CHỈ trả lời câu hỏi về nội dung học tập dựa trên tài liệu được cung cấp ở trên
+1. CHỈ trả lời dựa trên: (a) tài liệu học tập ở trên, hoặc \
+(b) phần "[Ngữ cảnh bổ sung]" trong tin nhắn của học sinh nếu có
 2. Nếu học sinh/phụ huynh chào hỏi (ví dụ: "Xin chào", "Hello", "Chào cô", "Good morning", \
 "Hi", "Cô ơi", "How are you?", hoặc bất kỳ lời chào/thăm hỏi nào), hãy đáp lại \
 thân thiện bằng "[CONFIDENT]" kèm lời chào lại. KHÔNG escalate lời chào.
 3. Nếu câu hỏi KHÔNG liên quan đến nội dung học tập VÀ KHÔNG phải lời chào/thăm hỏi, \
-hoặc bạn KHÔNG TÌM THẤY thông tin trong tài liệu để trả lời, \
+VÀ KHÔNG có thông tin liên quan trong "[Ngữ cảnh bổ sung]", \
 hãy bắt đầu câu trả lời bằng: "[ESCALATE]"
-4. Nếu bạn TÌM THẤY thông tin và TỰ TIN trả lời, hãy bắt đầu bằng: "[CONFIDENT]"
+4. Nếu bạn TÌM THẤY thông tin (trong tài liệu HOẶC trong "[Ngữ cảnh bổ sung]") \
+và TỰ TIN trả lời, hãy bắt đầu bằng: "[CONFIDENT]"
 5. Sau tag [CONFIDENT] hoặc [ESCALATE], viết câu trả lời bình thường bằng tiếng Việt
 6. Giữ câu trả lời ngắn gọn, dễ hiểu (dưới 300 từ)
 7. ĐỊNH DẠNG: Dùng dấu gạch ngang (-) cho danh sách, KHÔNG dùng dấu sao (*) để in đậm hoặc in nghiêng
@@ -263,6 +268,66 @@ async def _send_escalation_email(
         )
 
 
+# ===== Grading context retrieval (Milvus) =====
+
+async def _fetch_grading_context(
+    question: str, user_id: str, channel: str
+) -> str:
+    """
+    Query Milvus for grading results relevant to the student's question.
+
+    Only applies to ``gchat`` channel (students).  Returns a formatted
+    context string that is prepended to the LLM prompt, or an empty
+    string if Milvus is unavailable or no results match.
+    """
+    if channel != CHANNEL_GCHAT:
+        return ""
+
+    try:
+        from database.repositories.grading_repository import (
+            search_student_grades,
+        )
+
+        results = await search_student_grades(
+            query=question,
+            student_id=user_id,
+            top_k=3,
+        )
+
+        if not results:
+            return ""
+
+        lines = [
+            "[Ngữ cảnh bổ sung — kết quả chấm bài của học sinh này, dùng để trả lời câu hỏi về điểm số:]",
+        ]
+        for r in results:
+            meta = r.get("metadata", {})
+            lines.append(
+                f"- Bài: {meta.get('assignment_title', '?')}, "
+                f"Điểm: {r['score']}/{r['max_score']}, "
+                f"Nhận xét ngắn: {meta.get('feedback', '')}"
+            )
+            if meta.get("detailed_feedback"):
+                lines.append(f"  Nhận xét chi tiết: {meta['detailed_feedback']}")
+            if meta.get("strengths"):
+                lines.append(f"  Điểm mạnh: {', '.join(meta['strengths'])}")
+            if meta.get("improvements"):
+                lines.append(
+                    f"  Cần cải thiện: {', '.join(meta['improvements'])}"
+                )
+        lines.append("[Hết ngữ cảnh bổ sung]")
+
+        logger.info(
+            f"[CHAT] Injected {len(results)} grading result(s) "
+            f"into prompt for {user_id}"
+        )
+        return "\n".join(lines)
+
+    except Exception as e:
+        logger.debug(f"[CHAT] Grading context lookup skipped: {e}")
+        return ""
+
+
 # ===== ChatService =====
 
 class ChatService:
@@ -358,6 +423,15 @@ class ChatService:
                 )
 
             prompt = f"{history_str}{prompt_prefix}: {question}"
+
+            # Attempt to enrich prompt with grading results from Milvus.
+            # If the student asks about their score / feedback, Milvus
+            # returns relevant grading records so Cô Hana can answer.
+            grading_context = await _fetch_grading_context(
+                question, user_id, channel
+            )
+            if grading_context:
+                prompt = f"{grading_context}\n\n{prompt}"
 
             # Call LLM
             result = await agent.run(prompt)

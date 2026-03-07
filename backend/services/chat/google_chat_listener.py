@@ -6,7 +6,9 @@ events when users @-mention the bot in a space.  The bot recognises
 four slash commands embedded in the message text:
 
 - ``/ask <question>`` — AI Q&A (student-facing persona, debounced)
-- ``/grade``          — Grade submitted homework images via AI
+- ``/grade``          — Grade submitted homework images via AI; results are
+                        stored in Milvus so students can later ``/ask`` about
+                        their scores
 - ``/dailysum``       — AI-generated daily lesson summary
 - ``/demosum``        — hardcoded demo summary (no API cost)
 
@@ -553,6 +555,30 @@ class GoogleChatListener:
                 assignment_title=assignment.title,
                 details=details,
             )
+
+            # Store grading result in Milvus so /ask can retrieve it
+            try:
+                from database.repositories.grading_repository import (
+                    store_grading_result,
+                )
+                await store_grading_result(
+                    student_id=f"gchat-{user_id}",
+                    student_name=user_name,
+                    subject=assignment.subject,
+                    assignment_title=assignment.title,
+                    score=score,
+                    max_score=assignment.max_score,
+                    feedback=feedback,
+                    detailed_feedback=detailed_feedback,
+                    strengths=details.get("strengths", []),
+                    improvements=details.get("improvements", []),
+                    graded_at=submission["graded_at"],
+                )
+            except Exception as milvus_err:
+                logger.warning(
+                    f"[GCHAT] Non-critical: failed to store grading "
+                    f"in Milvus: {milvus_err}"
+                )
 
             # Build reply message
             reply_parts = [
