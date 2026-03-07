@@ -54,28 +54,53 @@ def load_lesson_context() -> str:
     Load lesson context for the AI prompt.
 
     Strategy:
-    1. **Production** — query Milvus vector DB for the latest lesson
-       documents (requires ``MILVUS_HOST`` in ``.env``).
+    1. **Production** — query the ``daily_lessons`` Milvus collection
+       for the most recent lessons.  Uses a generic embedding to do a
+       broad semantic search (returning many rows) and concatenates
+       the ``text`` fields.
     2. **Demo / fallback** — read from ``data/lesson.txt``.
 
     Returns the combined context text, or an empty string if nothing
     is available.
     """
-    # Try Milvus first (production)
+    # Try Milvus first
     try:
-        from config.settings import get_settings
-        s = get_settings()
-        if getattr(s, "MILVUS_HOST", None):
-            from database.milvus_client import get_milvus_client
-            client = get_milvus_client()
-            if client and hasattr(client, "search"):
-                logger.info("[CHAT] Attempting to load lesson context from Milvus")
-                # In production, retrieve recent lesson documents
-                # For now this is a hook — the actual query depends on
-                # how documents are stored.  Falls through to file-based
-                # if Milvus is not populated.
+        from database.milvus_client import get_milvus_client
+        client = get_milvus_client()
+        if client and client.connected:
+            from database.repositories.daily_lesson_repository import (
+                DAILY_LESSONS_COLLECTION,
+                build_lesson_context_from_results,
+            )
+            collection = client.get_collection(DAILY_LESSONS_COLLECTION)
+            if collection is not None:
+                # Generate a generic embedding synchronously via the
+                # Gemini SDK's blocking helper so we don't need async.
+                import google.generativeai as genai
+                from config import settings as _s
+                resp = genai.embed_content(
+                    model=_s.embedding_model,
+                    content="bài học hôm nay tất cả các môn",
+                    task_type="retrieval_query",
+                    output_dimensionality=_s.embedding_dimension,
+                )
+                query_emb = resp["embedding"]
+
+                results = client.search_daily_lessons(
+                    collection_name=DAILY_LESSONS_COLLECTION,
+                    query_embedding=query_emb,
+                    top_k=10,
+                )
+                if results:
+                    text = build_lesson_context_from_results(results)
+                    logger.info(
+                        f"[CHAT] Loaded lesson context from Milvus "
+                        f"({len(results)} entries, {len(text)} chars)"
+                    )
+                    return text
+                logger.info("[CHAT] Milvus daily_lessons collection is empty — falling back to file")
     except Exception as e:
-        logger.debug(f"[CHAT] Milvus not available, falling back to file: {e}")
+        logger.debug(f"[CHAT] Milvus lesson lookup failed, falling back to file: {e}")
 
     # Fallback: read from data/lesson.txt
     return _load_lesson_from_file()
@@ -328,6 +353,56 @@ async def _fetch_grading_context(
         return ""
 
 
+# ===== Student profile context retrieval (Milvus) =====
+
+async def _fetch_student_profile_context(user_id: str) -> str:
+    """
+    Retrieve a student profile from Milvus and format it as a context block.
+
+    Used by ``suggest_homework()`` so the LLM knows the student's
+    strengths, weaknesses, and subjects when generating personalised
+    homework suggestions.
+
+    Returns a formatted context string, or an empty string if no
+    profile exists.
+    """
+    try:
+        from database.repositories.student_profile_repository import (
+            get_student_profile,
+        )
+
+        profile = await get_student_profile(user_id)
+        if not profile:
+            return ""
+
+        meta = profile.get("metadata", {})
+        lines = [
+            "[Hồ sơ học sinh]",
+            f"- Tên: {profile.get('student_name', '?')}",
+            f"- Lớp: {profile.get('class_name', '?')}, Khối: {profile.get('grade', '?')}",
+        ]
+        if meta.get("subjects"):
+            lines.append(f"- Các môn: {', '.join(meta['subjects'])}")
+        if meta.get("learning_level"):
+            lines.append(f"- Trình độ: {meta['learning_level']}")
+        if meta.get("strengths"):
+            lines.append(f"- Điểm mạnh: {', '.join(meta['strengths'])}")
+        if meta.get("weaknesses"):
+            lines.append(f"- Điểm yếu / cần cải thiện: {', '.join(meta['weaknesses'])}")
+        if meta.get("notes"):
+            lines.append(f"- Ghi chú: {meta['notes']}")
+        lines.append("[Hết hồ sơ học sinh]")
+
+        logger.info(
+            f"[CHAT] Injected student profile for {user_id} into prompt"
+        )
+        return "\n".join(lines)
+
+    except Exception as e:
+        logger.debug(f"[CHAT] Student profile lookup skipped: {e}")
+        return ""
+
+
 # ===== ChatService =====
 
 class ChatService:
@@ -472,6 +547,95 @@ class ChatService:
             return (
                 "Xin lỗi, hệ thống AI đang gặp sự cố. "
                 "Vui lòng thử lại sau hoặc liên hệ giáo viên trực tiếp ạ."
+            )
+
+    async def suggest_homework(
+        self,
+        user_id: str,
+        user_name: str,
+        subject_hint: str = "",
+    ) -> str:
+        """
+        Generate personalised supplementary homework suggestions.
+
+        Called by the ``/hw`` Google Chat command.
+
+        1. Retrieve the student's profile from Milvus (strengths,
+           weaknesses, subjects, learning level).
+        2. Retrieve recent grading results from Milvus.
+        3. Build a rich context block and ask the LLM for tailored
+           homework exercises.
+
+        Args:
+            user_id: Platform-prefixed student ID (e.g. ``gchat-users/…``).
+            user_name: Display name.
+            subject_hint: Optional subject the student wants to practise
+                          (e.g. "Toán").  If empty the LLM decides based
+                          on the profile.
+
+        Returns:
+            AI-generated homework suggestions (plain Vietnamese text).
+        """
+        # --- 1. Fetch student profile ---
+        profile_block = await _fetch_student_profile_context(user_id)
+
+        # --- 2. Fetch recent grading context ---
+        grading_block = await _fetch_grading_context(
+            "kết quả chấm bài gần đây", user_id, CHANNEL_GCHAT
+        )
+
+        # --- 3. Build LLM prompt ---
+        context_parts: list[str] = []
+        if profile_block:
+            context_parts.append(profile_block)
+        if grading_block:
+            context_parts.append(grading_block)
+
+        context_str = "\n\n".join(context_parts)
+
+        subject_line = (
+            f"Học sinh muốn luyện tập thêm môn: {subject_hint}"
+            if subject_hint
+            else "Học sinh muốn luyện tập thêm (không chỉ định môn cụ thể)"
+        )
+
+        prompt = f"""{context_str}
+
+{subject_line}
+
+Dựa trên hồ sơ, điểm mạnh, điểm yếu, và kết quả chấm bài gần đây của học sinh, \
+hãy gợi ý 3-5 bài tập bổ sung phù hợp để học sinh luyện tập thêm.
+
+YÊU CẦU:
+1. Tập trung vào các điểm yếu và phần cần cải thiện
+2. Bài tập từ dễ đến khó, phù hợp với trình độ học sinh
+3. Mỗi bài tập ghi rõ: tên bài, mô tả ngắn, mức độ khó
+4. Xuất PLAIN TEXT, KHÔNG dùng Markdown (*, **, _, `, #, >)
+5. Dùng số thứ tự (1., 2., 3.) và gạch ngang (-) cho danh sách
+6. Trả lời bằng tiếng Việt, ngôn ngữ thân thiện phù hợp học sinh lớp 4
+
+Nếu không có hồ sơ học sinh, hãy gợi ý bài tập ôn tập chung cho lớp 4."""
+
+        try:
+            result = await self._agent_gchat.run(prompt)
+            raw = str(result.output).strip()
+
+            # Strip confidence / escalate tags
+            for tag in ("[CONFIDENT]", "[ESCALATE]"):
+                if raw.startswith(tag):
+                    raw = raw[len(tag):].strip()
+
+            # Strip any leftover markdown
+            raw = raw.replace("*", "").replace("#", "")
+
+            header = f"Bài tập bổ sung gợi ý cho {user_name}:\n\n"
+            return header + raw
+
+        except Exception as e:
+            logger.error(f"[CHAT] Error generating homework suggestions: {e}")
+            return (
+                "Xin lỗi, cô Hana chưa thể tạo bài tập bổ sung lúc này. "
+                "Vui lòng thử lại sau ạ."
             )
 
     async def summarize_daily(self, channel: str = CHANNEL_ZALO) -> str:
