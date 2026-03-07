@@ -212,10 +212,12 @@ async def _send_escalation_email(
     user_id: str, user_name: str, question: str
 ) -> None:
     """
-    Send an escalation email to the teacher.
+    Send an escalation email to the configured teacher(s).
 
     Uses the existing ``NotificationService.create_teacher_escalation()``
     factory method so we don't duplicate notification-building logic.
+    ``TEACHER_EMAIL`` may contain multiple comma-separated addresses;
+    the EmailNotifier delivers to all of them in a single transaction.
     Falls back to logging if email delivery fails.
     """
     try:
@@ -247,7 +249,10 @@ async def _send_escalation_email(
         results = await service.send(notification)
         for r in results:
             if r.success:
-                logger.info(f"[ESCALATION] Email sent for {user_name} ({user_id})")
+                logger.info(
+                    f"[ESCALATION] Email sent to {len(settings.teacher_emails)} teacher(s) "
+                    f"for {user_name} ({user_id})"
+                )
             else:
                 logger.warning(f"[ESCALATION] Email failed: {r.error_message}")
 

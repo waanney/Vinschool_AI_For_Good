@@ -220,7 +220,7 @@ class HomeworkGradingWorkflow:
         student_name: Optional[str] = None,
     ) -> None:
         """
-        Send low grade alert to teacher when student scores below threshold.
+        Send low grade alert to teacher(s) when student scores below threshold.
         """
         if not teacher_email:
             logger.debug("No teacher email provided, skipping low grade notification")
@@ -270,7 +270,10 @@ class HomeworkGradingWorkflow:
 
             for result in results:
                 if result.success:
-                    logger.info(f"Low grade alert sent to {teacher_email}")
+                    logger.info(
+                        f"Low grade alert sent to {teacher_email} "
+                        f"({len([e for e in teacher_email.split(',') if e.strip()])} recipient(s))"
+                    )
                 else:
                     logger.warning(f"Low grade alert failed: {result.error_message}")
 

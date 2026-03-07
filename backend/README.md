@@ -381,7 +381,7 @@ SMTP_PORT=587
 SMTP_USERNAME=your-email@gmail.com
 SMTP_PASSWORD=your-app-password                 # abcdefghijklmnop (no spaces)
 SMTP_USE_TLS=true
-TEACHER_EMAIL=teacher@vinschool.edu.vn          # Recipient for escalation/low-grade emails
+TEACHER_EMAIL=teacher@vinschool.edu.vn,teacher2@vinschool.edu.vn  # Comma-separated list of recipients for escalation/low-grade emails
 NOTIFICATION_SENDER_EMAIL=your-email@gmail.com  # Must match SMTP_USERNAME for Gmail
 NOTIFICATION_SENDER_NAME=Vinschool AI Assistant
 
@@ -449,10 +449,10 @@ The Zalo channel stores plain-text messages in-memory; the frontend polls `GET /
 
 **Submission API endpoints** (populated by Google Chat `/grade` command):
 
-| Method   | Endpoint                                     | Description                            |
-| -------- | -------------------------------------------- | -------------------------------------- |
-| `GET`    | `/api/teacher/submissions`                   | List all graded submissions            |
-| `POST`   | `/api/teacher/submissions/{id}/view`         | Mark a submission as viewed by teacher |
+| Method | Endpoint                             | Description                            |
+| ------ | ------------------------------------ | -------------------------------------- |
+| `GET`  | `/api/teacher/submissions`           | List all graded submissions            |
+| `POST` | `/api/teacher/submissions/{id}/view` | Mark a submission as viewed by teacher |
 
 > **Note:** Zalo uses an in-memory store — messages are lost when the server restarts. For production, replace with Zalo OA API integration. Submissions also use an in-memory store for the demo.
 
@@ -460,12 +460,12 @@ The Zalo channel stores plain-text messages in-memory; the frontend polls `GET /
 
 | Command                                               | What it does                                                     |
 | ----------------------------------------------------- | ---------------------------------------------------------------- |
-| `python scripts/demo_notification.py --dry-run`       | Preview all notification types without sending                   |
-| `python scripts/demo_notification.py --escalation`    | Send teacher escalation email                                    |
-| `python scripts/demo_notification.py --low-grade`     | Send low grade alert email                                       |
-| `python scripts/demo_notification.py --daily-summary` | Send daily summary to Google Chat                                |
-| `python scripts/demo_notification.py --daily-parent`  | Send daily summary to Zalo clone UI (requires `run_zalo_server`) |
-| `python scripts/demo_notification.py --all`           | Run all demos above                                              |
+| `python -m scripts.demo_notification --dry-run`       | Preview all notification types without sending                   |
+| `python -m scripts.demo_notification --escalation`    | Send teacher escalation email                                    |
+| `python -m scripts.demo_notification --low-grade`     | Send low grade alert email                                       |
+| `python -m scripts.demo_notification --daily-summary` | Send daily summary to Google Chat                                |
+| `python -m scripts.demo_notification --daily-parent`  | Send daily summary to Zalo clone UI (requires `run_zalo_server`) |
+| `python -m scripts.demo_notification --all`           | Run all demos above                                              |
 
 ### Chat Service Configuration
 
@@ -548,7 +548,7 @@ Every command returns a single reply — no intermediate typing indicators.
 #### Escalation `.env`
 
 ```bash
-TEACHER_EMAIL=teacher@vinschool.edu.vn  # Recipient for escalation emails
+TEACHER_EMAIL=teacher@vinschool.edu.vn,teacher2@vinschool.edu.vn  # Comma-separated; all teachers receive escalation emails
 ```
 
 ## Contributing
