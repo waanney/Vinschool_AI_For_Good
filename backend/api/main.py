@@ -5,12 +5,17 @@ Main application initialization with middleware and routes.
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from config import settings
 from database import init_db, close_db
 from api.routes import teacher, student, admin, zalo
 from utils.logger import logger
+
+# Persistent directory for uploaded submission images
+UPLOADS_DIR = Path(__file__).resolve().parent.parent / "uploads" / "submissions"
 
 
 @asynccontextmanager
@@ -72,6 +77,14 @@ app.include_router(teacher.router, prefix="/api/teacher", tags=["Teacher"])
 app.include_router(student.router, prefix="/api/student", tags=["Student"])
 app.include_router(admin.router, prefix="/api/admin", tags=["Admin"])
 app.include_router(zalo.router, prefix="/api/zalo", tags=["Zalo"])
+
+# Serve uploaded submission images as static files
+UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+app.mount(
+    "/uploads",
+    StaticFiles(directory=str(UPLOADS_DIR.parent)),
+    name="uploads",
+)
 
 
 @app.get("/")

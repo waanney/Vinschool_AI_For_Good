@@ -164,10 +164,11 @@ class SubmissionResponse(BaseModel):
 
 
 class SubmissionsListResponse(BaseModel):
-    """List of submissions with unviewed count for notification badge."""
+    """List of submissions with unviewed count and grading thresholds."""
     submissions: list[SubmissionResponse]
     count: int
     unviewed_count: int
+    low_grade_threshold: float
 
 
 @router.get("/submissions", response_model=SubmissionsListResponse)
@@ -182,12 +183,15 @@ async def get_submissions():
         get_submissions,
         get_unviewed_count,
     )
+    from config.settings import get_settings
 
+    app_settings = get_settings()
     submissions = get_submissions()
     return SubmissionsListResponse(
         submissions=[SubmissionResponse(**s) for s in submissions],
         count=len(submissions),
         unviewed_count=get_unviewed_count(),
+        low_grade_threshold=app_settings.LOW_GRADE_THRESHOLD,
     )
 
 

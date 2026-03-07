@@ -449,12 +449,13 @@ The Zalo channel stores plain-text messages in-memory; the frontend polls `GET /
 
 **Submission API endpoints** (populated by Google Chat `/grade` command):
 
-| Method | Endpoint                             | Description                            |
-| ------ | ------------------------------------ | -------------------------------------- |
-| `GET`  | `/api/teacher/submissions`           | List all graded submissions            |
-| `POST` | `/api/teacher/submissions/{id}/view` | Mark a submission as viewed by teacher |
+| Method | Endpoint                             | Description                                                  |
+| ------ | ------------------------------------ | ------------------------------------------------------------ |
+| `GET`  | `/api/teacher/submissions`           | List all graded submissions (includes `low_grade_threshold`) |
+| `POST` | `/api/teacher/submissions/{id}/view` | Mark a submission as viewed by teacher                       |
+| `GET`  | `/uploads/submissions/{file}`        | Serve submitted homework images (static mount)               |
 
-> **Note:** Zalo uses an in-memory store — messages are lost when the server restarts. For production, replace with Zalo OA API integration. Submissions also use an in-memory store for the demo.
+> **Note:** Zalo uses an in-memory store — messages are lost when the server restarts. For production, replace with Zalo OA API integration. Submissions also use an in-memory store for the demo. Uploaded images are persisted in `uploads/submissions/` and served as static files at `/uploads/`.
 
 #### Notification Demos
 
@@ -534,7 +535,7 @@ The bot responds to `/ask`, `/grade`, `/dailysum`, `/demosum`, and `/help` prefi
 - `@Vinschool Bot /demosum`
 - `@Vinschool Bot /help`
 
-The `/grade` command accepts attached images, grades them using Gemini Vision API, stores the result in the LMS dashboard, and sends a low-grade alert email if the score is below 7.0.
+The `/grade` command accepts attached images, grades them using Gemini Vision API, persists the images in `uploads/submissions/`, stores the result in the LMS dashboard, and sends a low-grade alert email if the score is below `LOW_GRADE_THRESHOLD`. All timestamps are stored in UTC with timezone info so the LMS displays the correct local time.
 
 Every command returns a single reply — no intermediate typing indicators.
 
