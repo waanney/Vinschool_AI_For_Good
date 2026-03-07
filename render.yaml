@@ -88,6 +88,11 @@ services:
           name: vinschool-ai-backend
           type: web
           property: host
+      - key: BACKEND_URL
+        fromService:
+          name: vinschool-ai-backend
+          type: web
+          property: host
 
 # Managed PostgreSQL Database
 databases:
