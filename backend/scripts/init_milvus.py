@@ -11,11 +11,23 @@ from utils.logger import logger
 async def init_milvus():
     """Initialize Milvus collections."""
     logger.info("Initializing Milvus collections...")
-    
+
     # Create main document collection
     collection = milvus_client.create_document_collection("documents")
     logger.info(f"Created collection: {collection.name}")
-    
+
+    # Create grading results collection
+    grading_col = milvus_client.create_grading_collection("grading_results")
+    logger.info(f"Created collection: {grading_col.name}")
+
+    # Create student profiles collection
+    profiles_col = milvus_client.create_student_profiles_collection("student_profiles")
+    logger.info(f"Created collection: {profiles_col.name}")
+
+    # Create daily lessons collection
+    lessons_col = milvus_client.create_daily_lessons_collection("daily_lessons")
+    logger.info(f"Created collection: {lessons_col.name}")
+
     logger.info("Milvus initialization complete!")
 
 

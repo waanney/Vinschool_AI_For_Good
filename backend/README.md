@@ -15,6 +15,7 @@ Multi-agent AI system for educational support built with PydanticAI, Milvus, and
 
 - **Document Parsing**: Supports PPTX, DOCX, PDF, and images
 - **Vietnamese OCR**: Tesseract-based OCR with Vietnamese language support
+- **Lesson Image Parsing**: Upload a lesson photo and Gemini 2.5 Pro extracts structured content (subject, title, key points, homework) and stores it in Milvus
 - **Vector Embeddings**: Automatic embedding generation and storage in Milvus
 - **Metadata Extraction**: Keyword and summary generation
 
@@ -25,6 +26,7 @@ Multi-agent AI system for educational support built with PydanticAI, Milvus, and
 - **Two-Tier Feedback**: Concise feedback (≤100 chars, for Google Chat reply & LMS table) and detailed feedback (4-6 sentence paragraph from Cô Hana, for email & LMS detail modal)
 - **Cô Hana Persona**: AI always speaks as "Cô Hana"
 - **Vietnamese Name Convention**: Uses last 2 words of student's full name; preserves diacritical marks exactly as received
+- **Milvus Grading Storage**: After grading, results (score, feedback, strengths, improvements) are stored in Milvus so students can later `/ask` about their grades
 - **Teacher Override**: Teachers can review and adjust AI grades
 
 ### Notification Service
@@ -47,6 +49,7 @@ Multi-agent AI system for educational support built with PydanticAI, Milvus, and
 - **Message Debouncing**: Rapid messages from the same user are batched (3s quiet window) into a single AI request
 - **Conversation History**: Per-user history (last 10 messages) for contextual follow-ups
 - **Smart Escalation**: Zalo → polite apology only; Google Chat → email to teacher + student notification
+- **Grading Context Retrieval**: When a student `/ask`s about their grades, Milvus is queried for relevant grading results which are injected into the LLM prompt so Cô Hana can answer with actual score, feedback, strengths, and improvements
 - **Lesson Context**: AI answers are grounded in lesson data — reads from **Milvus** in production, falls back to `data/lesson.txt` for local development
 
 ## Architecture
@@ -95,10 +98,10 @@ Multi-agent AI system for educational support built with PydanticAI, Milvus, and
 │  └──────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────┘
                           │
-┌──────────────────────┬──────────────────────────────┐
-│    Milvus Vector DB  │    PostgreSQL Database       │
-│  (Document Embeddings)│  (Student, Teacher, etc.)   │
-└──────────────────────┴──────────────────────────────┘
+┌───────────────────────┬─────────────────────────────┐
+│    Milvus Vector DB   │    PostgreSQL Database      │
+│ (Documents + Grading) │  (Student, Teacher, etc.)   │
+└───────────────────────┴─────────────────────────────┘
 ```
 
 ## Quick Start
@@ -173,8 +176,11 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 # Install dependencies
 uv pip install -e .[dev]
 
-# Start Milvus and PostgreSQL
+# Option A: Local Milvus + PostgreSQL via Docker
 docker-compose up -d milvus postgres
+
+# Option B: Cloud services (Zilliz Cloud + Render PostgreSQL)
+# Set MILVUS_URI, MILVUS_TOKEN, DATABASE_URL in .env — no Docker needed
 
 # Run development server
 uvicorn api.main:app --reload
@@ -184,7 +190,10 @@ uvicorn api.main:app --reload
 
 ```bash
 pip install -e .[dev]
+
+# Start Milvus and PostgreSQL (or use cloud services via .env)
 docker-compose up -d milvus postgres
+
 uvicorn api.main:app --reload
 ```
 
@@ -243,17 +252,19 @@ backend/
 │   ├── milvus_client.py     # Milvus vector DB
 │   ├── postgres_client.py   # PostgreSQL
 │   └── repositories/        # Data access layer
+│       ├── document_repository.py   # Document storage
+│       └── grading_repository.py    # Grading results → Milvus
 ├── domain/                  # Domain models (DDD)
 │   ├── models/              # Entities
 │   └── repositories/        # Repository interfaces
-├── services/                        # Business services
-│   ├── chat/                        # Interactive AI chat (Cô Hana)
+├── services/                # Business services
+│   ├── chat/                # Interactive AI chat (Cô Hana)
 │   │   ├── chat_service.py          # Channel-aware LLM orchestrator
 │   │   ├── debouncer.py             # Per-user message debouncing
 │   │   ├── google_chat_listener.py  # Pub/Sub consumer + Chat API replier
 │   │   └── submission_store.py      # In-memory store for /grade submissions
-│   ├── scheduler.py                 # 6pm daily summary scheduler + /dailysum trigger
-│   └── notification/                # Notification service
+│   ├── scheduler.py         # 6pm daily summary scheduler + /dailysum trigger
+│   └── notification/        # Notification service
 │       ├── models.py                # Notification data models
 │       ├── base.py                  # BaseNotifier interface
 │       ├── email_notifier.py        # SMTP email (escalation + low grade)
@@ -328,19 +339,39 @@ GRADING_LLM_MODEL=claude-3-opus-20240229
 Key environment variables:
 
 ```bash
-# Database
+# Database — pick ONE option:
+# Option A: Full DATABASE_URL (Render, Heroku, Neon, etc.)
+#   When set, individual POSTGRES_* vars are ignored for connections.
+#   For Render: use the EXTERNAL hostname (dpg-xxx-a.region.render.com).
+#   The internal hostname (dpg-xxx-a) is only reachable from inside Render.
+DATABASE_URL=postgresql://user:password@dpg-xxx-a.oregon-postgres.render.com/vinschool_ai
+# Option B: Individual vars (local Docker Compose — default)
 POSTGRES_HOST=localhost
+POSTGRES_PORT=5432
 POSTGRES_DB=vinschool_ai
 POSTGRES_USER=vinschool
 POSTGRES_PASSWORD=your_password
 
-# Milvus
+# Milvus — pick ONE option:
+# Option A: Zilliz Cloud (managed Milvus)
+MILVUS_URI=https://your-cluster.serverless.gcp-us-west1.cloud.zilliz.com
+MILVUS_TOKEN=your-zilliz-api-token
+# Option B: Local Milvus (Docker Compose — default)
 MILVUS_HOST=localhost
 MILVUS_PORT=19530
+# Shared
+MILVUS_COLLECTION_PREFIX=vinschool   # 4 collections: vinschool_documents, vinschool_grading_results, vinschool_student_profiles, vinschool_daily_lessons
 
 # LLM
-OPENAI_API_KEY=your_openai_key
-DEFAULT_LLM_MODEL=gpt-4-turbo-preview
+DEFAULT_PROVIDER=google              # openai, google, or anthropic
+GEMINI_API_KEY=your_gemini_key
+DEFAULT_LLM_MODEL=gemini-2.5-flash
+GRADING_LLM_MODEL=gemini-2.5-flash
+
+# Embeddings
+EMBEDDING_PROVIDER=google
+EMBEDDING_MODEL=gemini-embedding-001
+EMBEDDING_DIMENSION=768
 
 # Workflows
 ENABLE_AUTO_GRADING=true
@@ -457,6 +488,21 @@ The Zalo channel stores plain-text messages in-memory; the frontend polls `GET /
 | `POST` | `/api/teacher/submissions/{id}/view` | Mark a submission as viewed by teacher                       |
 | `GET`  | `/uploads/submissions/{file}`        | Serve submitted homework images (static mount)               |
 
+**Student profile API endpoints:**
+
+| Method | Endpoint                            | Description                                           |
+| ------ | ----------------------------------- | ----------------------------------------------------- |
+| `POST` | `/api/student/profile`              | Create or update a student profile in Milvus (upsert) |
+| `GET`  | `/api/student/profile/{student_id}` | Retrieve a student profile by student_id              |
+
+**Daily lesson API endpoints:**
+
+| Method | Endpoint                            | Description                              |
+| ------ | ----------------------------------- | ---------------------------------------- |
+| `POST` | `/api/teacher/daily-lesson`              | Upload a daily lesson entry (JSON) to Milvus                                   |
+| `POST` | `/api/teacher/daily-lesson/parse-image` | Upload a lesson image, parse it with Gemini 2.5 Pro vision, and store in Milvus |
+| `GET`  | `/api/teacher/daily-lessons/{date}`     | Retrieve all lessons for a specific date                                       |
+
 > **Note:** Zalo uses an in-memory store — messages are lost when the server restarts. For production, replace with Zalo OA API integration. Submissions also use an in-memory store for the demo. Uploaded images are persisted in `uploads/submissions/` and served as static files at `/uploads/`.
 
 #### Notification Demos
@@ -529,15 +575,31 @@ Students use `/ask`, `/dailysum`, or `/demosum` when @mentioning the bot. Run th
 cd backend && python -m scripts.run_google_chat
 ```
 
-The bot responds to `/ask`, `/grade`, `/dailysum`, `/demosum`, and `/help` prefixes. For example:
+The bot responds to `/ask`, `/grade`, `/hw`, `/dailysum`, `/demosum`, and `/help` prefixes. For example:
 
 - `@Vinschool Bot /ask Hôm nay học bài gì?`
 - `@Vinschool Bot /grade` (attach homework images)
+- `@Vinschool Bot /hw` (suggest supplementary homework based on profile)
+- `@Vinschool Bot /hw Toán` (suggest homework for a specific subject)
 - `@Vinschool Bot /dailysum`
 - `@Vinschool Bot /demosum`
 - `@Vinschool Bot /help`
 
-The `/grade` command accepts attached images, grades them using Gemini Vision API, persists the images in `uploads/submissions/`, stores the result in the LMS dashboard, and sends a low-grade alert email if the score is below `LOW_GRADE_THRESHOLD`. All timestamps are stored in UTC with timezone info so the LMS displays the correct local time.
+The `/grade` command accepts attached images, grades them using Gemini Vision API, persists the images in `uploads/submissions/`, stores the result in the LMS dashboard, stores the grading result in Milvus (for later `/ask` retrieval), and sends a low-grade alert email if the score is below `LOW_GRADE_THRESHOLD`. All timestamps are stored in UTC with timezone info so the LMS displays the correct local time.
+
+After grading, if the same student uses `/ask` to ask about their score or feedback, Cô Hana retrieves the relevant grading results from Milvus and answers with actual data (score, feedback, strengths, improvements).
+
+The `/hw` command generates personalised supplementary homework suggestions based on the student's Milvus profile (strengths, weaknesses, subjects, learning level) and recent grading results. Student profiles are stored in the `vinschool_student_profiles` collection and can be created via the `POST /api/student/profile` endpoint or seeded using:
+
+```bash
+cd backend && python -m scripts.seed_student_profiles
+```
+
+The `/dailysum` and `/ask` commands use lesson content from the `vinschool_daily_lessons` Milvus collection. If the collection is empty, they fall back to reading `data/lesson.txt`. To populate the collection from the lesson file:
+
+```bash
+cd backend && python -m scripts.seed_daily_lessons
+```
 
 Every command returns a single reply — no intermediate typing indicators.
 

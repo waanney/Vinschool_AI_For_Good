@@ -6,7 +6,11 @@ events when users @-mention the bot in a space.  The bot recognises
 four slash commands embedded in the message text:
 
 - ``/ask <question>`` — AI Q&A (student-facing persona, debounced)
-- ``/grade``          — Grade submitted homework images via AI
+- ``/grade``          — Grade submitted homework images via AI; results are
+                        stored in Milvus so students can later ``/ask`` about
+                        their scores
+- ``/hw [môn]``       — Suggest supplementary homework based on the student's
+                        Milvus profile (strengths/weaknesses) and recent grades
 - ``/dailysum``       — AI-generated daily lesson summary
 - ``/demosum``        — hardcoded demo summary (no API cost)
 
@@ -348,9 +352,10 @@ class GoogleChatListener:
         """
         Process a parsed Google Chat event.
 
-        Responds to four commands:
+        Responds to five commands:
         - /ask <question>  — AI Q&A (debounced, student persona)
         - /grade           — Grade submitted homework images
+        - /hw [môn]        — Suggest supplementary homework
         - /dailysum        — AI-generated lesson summary for today
         - /demosum         — hardcoded demo summary (no AI cost)
 
@@ -371,6 +376,7 @@ class GoogleChatListener:
                 "📋 Danh sách lệnh Google Chat:\n\n"
                 "/ask <câu hỏi> — Hỏi đáp AI (Cô Hana sẽ trả lời)\n"
                 "/grade — Chấm bài tập (đính kèm ảnh bài làm)\n"
+                "/hw [môn] — Gợi ý bài tập bổ sung (dựa trên hồ sơ học sinh)\n"
                 "/dailysum — Tóm tắt bài học hôm nay (AI tạo tự động)\n"
                 "/demosum — Xem bản tóm tắt mẫu (không tốn AI)\n"
                 "/help — Hiển thị danh sách lệnh này"
@@ -394,6 +400,12 @@ class GoogleChatListener:
         if text.lower().startswith("/grade"):
             logger.info(f"[GCHAT] /grade from {event['user_name']}")
             await self._handle_grade(event)
+            return
+
+        # /hw [subject] — supplementary homework suggestions
+        if text.lower().startswith("/hw"):
+            logger.info(f"[GCHAT] /hw from {event['user_name']}")
+            await self._handle_hw(event)
             return
 
         # /ask <question> — AI Q&A
@@ -554,6 +566,30 @@ class GoogleChatListener:
                 details=details,
             )
 
+            # Store grading result in Milvus so /ask can retrieve it
+            try:
+                from database.repositories.grading_repository import (
+                    store_grading_result,
+                )
+                await store_grading_result(
+                    student_id=f"gchat-{user_id}",
+                    student_name=user_name,
+                    subject=assignment.subject,
+                    assignment_title=assignment.title,
+                    score=score,
+                    max_score=assignment.max_score,
+                    feedback=feedback,
+                    detailed_feedback=detailed_feedback,
+                    strengths=details.get("strengths", []),
+                    improvements=details.get("improvements", []),
+                    graded_at=submission["graded_at"],
+                )
+            except Exception as milvus_err:
+                logger.warning(
+                    f"[GCHAT] Non-critical: failed to store grading "
+                    f"in Milvus: {milvus_err}"
+                )
+
             # Build reply message
             reply_parts = [
                 f"Kết quả chấm bài của {user_name}:",
@@ -593,6 +629,61 @@ class GoogleChatListener:
             await self._reply_to_chat(
                 space_name,
                 "Xin lỗi, có lỗi xảy ra khi chấm bài.\n"
+                "Vui lòng thử lại sau ạ.",
+                thread_name,
+            )
+
+    async def _handle_hw(self, event: dict) -> None:
+        """
+        Handle the ``/hw`` command: suggest supplementary homework.
+
+        Flow:
+        1. Parse optional subject from ``/hw [môn]``
+        2. Look up student profile from Milvus
+        3. Look up recent grading results from Milvus
+        4. Build context and call LLM for personalised suggestions
+        5. Reply in Google Chat
+        """
+        space_name = event["space_name"]
+        thread_name = event["thread_name"]
+        user_id = event["user_id"]
+        user_name = event["user_name"]
+
+        # Parse optional subject: "/hw Toán" → subject "Toán"
+        text = event["text"].strip()
+        subject_hint = text[3:].strip() if len(text) > 3 else ""
+
+        # Send processing indicator
+        await self._reply_to_chat(
+            space_name,
+            f"Cô Hana đang chuẩn bị bài tập bổ sung cho {user_name}... ✏️",
+            thread_name,
+        )
+
+        try:
+            from services.chat.chat_service import (
+                ChatService,
+                CHANNEL_GCHAT,
+            )
+
+            service = ChatService()
+            suggestions = await service.suggest_homework(
+                user_id=f"gchat-{user_id}",
+                user_name=user_name,
+                subject_hint=subject_hint,
+            )
+
+            await self._reply_to_chat(space_name, suggestions, thread_name)
+            logger.info(
+                f"[GCHAT] /hw reply sent to {user_name} "
+                f"({len(suggestions)} chars)"
+            )
+
+        except Exception as e:
+            logger.error(f"[GCHAT] Error generating homework suggestions: {e}")
+            await self._reply_to_chat(
+                space_name,
+                "Xin lỗi, cô Hana chưa thể tạo bài tập bổ sung lúc này.\n"
                 "Vui lòng thử lại sau ạ.",
                 thread_name,
             )

@@ -60,7 +60,9 @@ async def init_db() -> None:
     # Sanitize URL for logging (hide password)
     from urllib.parse import urlparse
     parsed = urlparse(settings.async_database_url)
-    sanitized_url = f"{parsed.scheme}://{parsed.username}:****@{parsed.hostname}:{parsed.port}{parsed.path}"
+    host_part = parsed.hostname or "unknown"
+    port_part = f":{parsed.port}" if parsed.port else ""
+    sanitized_url = f"{parsed.scheme}://{parsed.username}:****@{host_part}{port_part}{parsed.path}"
     
     logger.info(f"Connecting to database: {sanitized_url}")
     
