@@ -20,9 +20,11 @@ Multi-agent AI system for educational support built with PydanticAI, Milvus, and
 
 ### Grading Agent
 
-- **Automated Grading**: Rubric-based homework evaluation
-- **Handwriting Support**: OCR for handwritten submissions
-- **Detailed Feedback**: Strengths, improvements, and personalized comments
+- **Automated Grading**: Rubric-based homework evaluation via Gemini vision
+- **Handwriting Support**: OCR-first for handwritten submissions, with direct vision grading as fallback when Tesseract is unavailable
+- **Two-Tier Feedback**: Concise feedback (≤100 chars, for Google Chat reply & LMS table) and detailed feedback (4-6 sentence paragraph from Cô Hana, for email & LMS detail modal)
+- **Cô Hana Persona**: AI always speaks as "Cô Hana"
+- **Vietnamese Name Convention**: Uses last 2 words of student's full name; preserves diacritical marks exactly as received
 - **Teacher Override**: Teachers can review and adjust AI grades
 
 ### Notification Service
