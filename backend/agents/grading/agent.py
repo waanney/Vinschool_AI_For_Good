@@ -22,7 +22,8 @@ class GradingCriteria(BaseModel):
 class GradingResult(BaseModel):
     """Result of grading an assignment."""
     total_score: float
-    feedback: str
+    feedback: str  # concise for GChat reply & LMS table
+    detailed_feedback: str = ""  # full paragraph for email & LMS detail
     criteria_scores: Dict[str, float] = Field(default_factory=dict)
     strengths: List[str] = Field(default_factory=list)
     improvements: List[str] = Field(default_factory=list)
@@ -34,15 +35,16 @@ class GradingAgent(BaseAgent):
 
     Capabilities:
     - Grade homework against rubric
-    - Extract text from images (OCR for handwritten work)
+    - Extract text from images (OCR primary, Gemini vision fallback)
     - Provide detailed feedback
     - Suggest improvements
     """
 
-    SYSTEM_PROMPT = """You are an expert educational assessment assistant.
+    SYSTEM_PROMPT = """You are Cô Hana, a caring and experienced primary-school teacher at Vinschool.
+You always refer to yourself as "Cô Hana" (never "co/thay", "thay", or any other title).
 Your role is to:
 1. Evaluate student work fairly and accurately
-2. Provide constructive, encouraging feedback
+2. Provide constructive, encouraging feedback in the warm voice of Cô Hana
 3. Identify strengths and areas for improvement
 4. Grade based on provided rubric criteria
 
@@ -51,7 +53,9 @@ Grading principles:
 - Focus on learning outcomes
 - Provide specific, actionable feedback
 - Encourage student growth
-- Use Vietnamese language for feedback when appropriate
+- Always write feedback in proper Vietnamese with full diacritical marks (e.g. "nắm khá chắc" not "nam kha chac")
+- Address the student by their short name (last two words of their full name)
+- Preserve the student's name exactly as given — do NOT add diacritical marks to a name provided without them
 """
 
     def __init__(self, config: Optional[AgentConfig] = None):
@@ -129,12 +133,15 @@ Grading principles:
                 # Vision mode: send image directly to Gemini
                 from pydantic_ai import BinaryContent
 
-                # Derive first name for personalized feedback
-                first_name = (student_name or "").split()[-1] if student_name else "Học sinh"
+                # Derive short name (last two words) for personalized feedback.
+                # Vietnamese names: family-middle-given, e.g. "Nguyen Van An" → "Van An"
+                name_parts = (student_name or "").split()
+                short_name = " ".join(name_parts[-2:]) if len(name_parts) >= 2 else (name_parts[0] if name_parts else "Hoc sinh")
 
                 prompt_text = f"""Look at this student's homework image and grade it based on the rubric.
 
-Student Name: {student_name or 'Học sinh'}
+Student Name: {student_name or 'Hoc sinh'}
+Short Name (use this when addressing the student): {short_name}
 Assignment Title: {assignment.title}
 Subject: {assignment.subject}
 Maximum Score: {assignment.max_score}
@@ -144,9 +151,11 @@ RUBRIC:
 
 IMPORTANT RULES:
 - Do NOT use any markdown formatting (no *, **, #, etc.)
-- Write all feedback in plain Vietnamese text only
+- Write all text in proper Vietnamese with full diacritical marks
 - The TOTAL_SCORE must be a number, grade fairly based on what you see
-- The FEEDBACK must be a single short sentence (max 100 characters) starting with "{first_name}" (the student's first name), written like a teacher's objective comment about the student's work, for example: "{first_name} da thuc hien dung cac phep tinh co ban, nhung can can than hon voi phan rut gon phan so."
+- FEEDBACK: one concise sentence (max 100 chars) starting with "{short_name}", summarising how the student did. Write in proper Vietnamese with diacritical marks, for example: "{short_name} nắm khá chắc kiến thức phần cộng trừ phân số, nhưng cần cẩn thận hơn."
+- DETAILED_FEEDBACK: a paragraph (4-6 sentences) as Cô Hana speaking to the student. Write in proper Vietnamese with diacritical marks. Start with "Chào {short_name}" and sign off naturally. Be specific about which problems or sections are correct/incorrect. Do NOT invent information not visible in the image. Do NOT use "cô/thầy" — always say "Cô Hana".
+- Preserve the student's name exactly as given (keep or omit diacritical marks as provided; do NOT add diacritical marks to a name that was given without them).
 
 Please read the student's handwritten work from the image and grade it.
 
@@ -155,7 +164,10 @@ You MUST format your response EXACTLY as follows (keep section headers in UPPERC
 TOTAL_SCORE: [number out of {assignment.max_score}]
 
 FEEDBACK:
-[one short sentence in Vietnamese starting with "{first_name}", max 100 chars, no special characters]
+[one short sentence in proper Vietnamese with diacritical marks, starting with "{short_name}", max 100 chars]
+
+DETAILED_FEEDBACK:
+[paragraph from Cô Hana to the student, 4-6 sentences, proper Vietnamese with diacritical marks]
 
 STRENGTHS:
 - [strength 1]
@@ -175,8 +187,13 @@ IMPROVEMENTS:
                 )
             else:
                 # Text mode: submission already extracted
+                name_parts = (student_name or "").split()
+                short_name = " ".join(name_parts[-2:]) if len(name_parts) >= 2 else (name_parts[0] if name_parts else "Hoc sinh")
+
                 prompt = f"""Grade this student assignment based on the provided rubric.
 
+Student Name: {student_name or 'Hoc sinh'}
+Short Name: {short_name}
 Assignment Title: {assignment.title}
 Subject: {assignment.subject}
 Maximum Score: {assignment.max_score}
@@ -187,12 +204,12 @@ RUBRIC:
 STUDENT SUBMISSION:
 {submission_text}
 
-Please provide:
-1. Score for each criterion
-2. Total score (out of {assignment.max_score})
-3. Detailed feedback in Vietnamese
-4. List of 2-3 strengths
-5. List of 2-3 areas for improvement
+IMPORTANT RULES:
+- Do NOT use any markdown formatting (no *, **, #, etc.)
+- Write all text in proper Vietnamese with full diacritical marks
+- FEEDBACK: one concise sentence (max 100 chars) starting with "{short_name}". Write in proper Vietnamese with diacritical marks.
+- DETAILED_FEEDBACK: a paragraph (4-6 sentences) as Cô Hana speaking to the student. Write in proper Vietnamese with diacritical marks.
+- Preserve the student's name exactly as given (do NOT add diacritical marks to a name given without them)
 
 Format your response as:
 CRITERION_SCORES:
@@ -202,7 +219,10 @@ CRITERION_SCORES:
 TOTAL_SCORE: [score]
 
 FEEDBACK:
-[detailed feedback in Vietnamese]
+[one short sentence in proper Vietnamese with diacritical marks, starting with "{short_name}", max 100 chars]
+
+DETAILED_FEEDBACK:
+[paragraph from Cô Hana, 4-6 sentences, proper Vietnamese with diacritical marks]
 
 STRENGTHS:
 - [strength 1]
@@ -299,8 +319,9 @@ IMPROVEMENTS:
                         except:
                             pass
 
-            # Extract feedback
+            # Extract feedback (concise) and detailed feedback (full paragraph)
             feedback = sections.get('FEEDBACK', '').strip()
+            detailed_feedback = sections.get('DETAILED_FEEDBACK', '').strip()
 
             # Extract strengths
             strengths = []
@@ -322,12 +343,14 @@ IMPROVEMENTS:
 
             # Strip markdown artifacts from all text fields
             feedback = feedback.replace('*', '').replace('#', '').strip()
+            detailed_feedback = detailed_feedback.replace('*', '').replace('#', '').strip()
             strengths = [s.replace('*', '').strip() for s in strengths]
             improvements = [i.replace('*', '').strip() for i in improvements]
 
             return GradingResult(
                 total_score=min(total_score, max_score),  # Cap at max
                 feedback=feedback,
+                detailed_feedback=detailed_feedback,
                 criteria_scores=criteria_scores,
                 strengths=strengths,
                 improvements=improvements,

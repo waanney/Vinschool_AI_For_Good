@@ -282,7 +282,7 @@ class EmailNotifier(BaseNotifier):
 
         {student_info}
 
-        {f'<div class="info-box"><p><span class="label">AI Feedback:</span></p><p>{ctx.feedback}</p></div>' if ctx.feedback else ''}
+        {f'<div class="info-box"><p><span class="label">Nhận xét từ Cô Hana:</span></p><p>{ctx.feedback}</p></div>' if ctx.feedback else ''}
 
         {improvements_html}
         """

@@ -72,6 +72,7 @@ class HomeworkGradingWorkflow:
             "success": False,
             "score": 0.0,
             "feedback": "",
+            "detailed_feedback": "",
             "details": {},
             "error": None,
         }
@@ -98,6 +99,7 @@ class HomeworkGradingWorkflow:
             result["success"] = True
             result["score"] = grading_result.total_score
             result["feedback"] = grading_result.feedback
+            result["detailed_feedback"] = grading_result.detailed_feedback
             result["details"] = {
                 "criteria_scores": grading_result.criteria_scores,
                 "strengths": grading_result.strengths,
@@ -115,7 +117,7 @@ class HomeworkGradingWorkflow:
                 await self._notify_low_grade(
                     assignment=assignment,
                     score=grading_result.total_score,
-                    feedback=grading_result.feedback,
+                    feedback=grading_result.detailed_feedback or grading_result.feedback,
                     improvements=grading_result.improvements,
                     teacher_id=teacher_id,
                     teacher_name=teacher_name,

@@ -229,7 +229,7 @@ async def demo_homework_grading():
     print("\n⏳ AI is grading the homework...")
     
     agent = GradingAgent()
-    result = await agent.grade_assignment(assignment, rubric)
+    result = await agent.grade_assignment(assignment, rubric, student_name="Nguyễn Quang Bách")
     
     print(f"\n✅ GRADING RESULTS")
     print("-" * 60)
@@ -239,6 +239,9 @@ async def demo_homework_grading():
         print(f"  - {criteria}: {score}")
     
     print(f"\n💬 Feedback:\n{result.feedback}")
+    
+    if result.detailed_feedback:
+        print(f"\n📝 Detailed Feedback (Cô Hana):\n{result.detailed_feedback}")
     
     if result.strengths:
         print(f"\n💪 Strengths:")

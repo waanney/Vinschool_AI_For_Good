@@ -33,6 +33,7 @@ def add_submission(
     subject: str = "Mathematics",
     assignment_title: str = "Homework Submission",
     details: Optional[dict] = None,
+    detailed_feedback: str = "",
 ) -> dict:
     """
     Add a graded submission to the store.
@@ -47,6 +48,7 @@ def add_submission(
         subject: Subject name (default: Mathematics).
         assignment_title: Title of the assignment.
         details: Optional dict with criteria_scores, strengths, improvements.
+        detailed_feedback: Full paragraph feedback from Cô Hana for email/LMS detail.
 
     Returns:
         The newly created submission dict.
@@ -60,6 +62,7 @@ def add_submission(
         "score": score,
         "max_score": max_score,
         "feedback": feedback,
+        "detailed_feedback": detailed_feedback,
         "attachment_paths": attachment_paths,
         "details": details or {},
         "graded_at": datetime.now(timezone.utc).isoformat(),
