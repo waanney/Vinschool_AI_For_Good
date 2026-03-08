@@ -57,7 +57,8 @@ export default function TeacherHomeworkTable({ userName }: { userName: string })
   const [filter, setFilter] = useState('all');
   const [homeworkList, setHomeworkList] = useState<any[]>([]);
   const [selectedStudent, setSelectedStudent] = useState<any>(null);
-  const [viewedStudentIds, setViewedStudentIds] = useState<number[]>([4]);
+  const [viewedStudentIdsByHW, setViewedStudentIdsByHW] = useState<Record<string, number[]>>({ unit9_bb: [4], unit9_tk: [4] });
+  const [viewedApiIdsByHW, setViewedApiIdsByHW] = useState<Record<string, string[]>>({ unit9_bb: [], unit9_tk: [] });
   const [activeHW, setActiveHW] = useState<any>(null);
 
   // --- API SUBMISSIONS (from /grade Google Chat command) ---
@@ -88,7 +89,8 @@ export default function TeacherHomeworkTable({ userName }: { userName: string })
     return () => clearInterval(interval);
   }, [fetchSubmissions]);
 
-  const markSubmissionViewed = async (submissionId: string) => {
+  const markSubmissionViewed = async (submissionId: string, hwId: string) => {
+    setViewedApiIdsByHW(prev => ({ ...prev, [hwId]: [...(prev[hwId] ?? []), submissionId] }));
     try {
       await fetch(`${API_BASE}/api/teacher/submissions/${submissionId}/view`, {
         method: "POST",
@@ -108,9 +110,9 @@ export default function TeacherHomeworkTable({ userName }: { userName: string })
   }, []);
 
   const students = [
-    { stt: 1, name: "Cấn Trần Quang Bách", score: 8.0, maxScore: 10.0, subTimeShort: "Jan 4, 2026", subTime: "15:00:00 4/1/2026", images: ["/BaiTapHS1_Demo.jpg", "/BaiTapHS2_Demo.jpg", "/BaiTapHS3_Demo.jpg"], comment: "Quang Bách đã nắm khá chắc kiến thức phần cộng trừ phân số. Tuy nhiên vẫn còn một số lỗi nằm ở phần cộng trừ và so sánh phân số.", strengths: ["Nắm vững kiến thức phần cộng trừ phân số cùng mẫu", "Biết quy đổi phân số về cùng mẫu số", "Trình bày lời giải rõ ràng, có logic"], improvements: ["Cần cẩn thận hơn ở phần so sánh phân số", "Kiểm tra lại kết quả sau khi làm xong", "Ôn tập thêm phần rút gọn phân số"] },
-    { stt: 2, name: "Trần Minh Khôi", score: 7.2, maxScore: 10.0, subTimeShort: "Jan 8, 2026", subTime: "15:00:00 8/1/2026", images: ["/BaiTapHS1_Demo.jpg", "/BaiTapHS2_Demo.jpg", "/BaiTapHS3_Demo.jpg"], comment: "Minh Khôi cần ôn thêm về phần cộng/trừ phân số cùng mẫu. Bài tập làm đúng 18/25 câu.", strengths: ["Hiểu được ý nghĩa cơ bản của phân số", "Làm đúng được phần nhận diện phân số trên sơ đồ", "Có cố gắng hoàn thành đủ các câu"], improvements: ["Cần ôn luyện thêm phần cộng/trừ phân số cùng mẫu", "Chú ý quy tắc tính toán để tránh sai sót", "Rèn luyện kỹ năng rút gọn phân số"] },
-    { stt: 3, name: "Phạm Bách Hợp", score: 9.2, maxScore: 10.0, subTimeShort: "Jan 8, 2026", subTime: "15:00:00 8/1/2026", images: ["/BaiTapHS1_Demo.jpg", "/BaiTapHS2_Demo.jpg", "/BaiTapHS3_Demo.jpg"], comment: "Bách Hợp đã nắm chắc kiến thức, tuy nhiên cần chú ý phần sắp xếp thứ tự phân số. Bài tập làm đúng 23/25 câu.", strengths: ["Nắm chắc kiến thức về phân số", "Thực hiện tốt phần cộng trừ phân số", "Bài làm cẩn thận, trình bày rõ ràng"], improvements: ["Cần chú ý hơn ở phần sắp xếp thứ tự phân số", "Kiểm tra lại 2 câu còn sai trước khi nộp bài"] },
+    { stt: 1, name: "Cấn Trần Quang Bách", score: 8.0, maxScore: 10.0, subTimeShort: "Jan 4, 2026", subTime: "15:00:00 4/1/2026", images: ["/BaiTapHA1_Demo.jpg", "/BaiTapHA2_Demo.jpg", "/BaiTapHA3_Demo.jpg"], comment: "Quang Bách đã nắm khá chắc kiến thức phần cộng trừ phân số. Tuy nhiên vẫn còn một số lỗi nằm ở phần cộng trừ và so sánh phân số.", strengths: ["Nắm vững kiến thức phần cộng trừ phân số cùng mẫu", "Biết quy đổi phân số về cùng mẫu số", "Trình bày lời giải rõ ràng, có logic"], improvements: ["Cần cẩn thận hơn ở phần so sánh phân số", "Kiểm tra lại kết quả sau khi làm xong", "Ôn tập thêm phần rút gọn phân số"] },
+    { stt: 2, name: "Trần Minh Khôi", score: 7.2, maxScore: 10.0, subTimeShort: "Jan 8, 2026", subTime: "15:00:00 8/1/2026", images: ["/BaiTapHA1_Demo.jpg", "/BaiTapHA2_Demo.jpg", "/BaiTapHA3_Demo.jpg"], comment: "Minh Khôi cần ôn thêm về phần cộng/trừ phân số cùng mẫu. Bài tập làm đúng 18/25 câu.", strengths: ["Hiểu được ý nghĩa cơ bản của phân số", "Làm đúng được phần nhận diện phân số trên sơ đồ", "Có cố gắng hoàn thành đủ các câu"], improvements: ["Cần ôn luyện thêm phần cộng/trừ phân số cùng mẫu", "Chú ý quy tắc tính toán để tránh sai sót", "Rèn luyện kỹ năng rút gọn phân số"] },
+    { stt: 3, name: "Phạm Bách Hợp", score: 9.2, maxScore: 10.0, subTimeShort: "Jan 8, 2026", subTime: "15:00:00 8/1/2026", images: ["/BaiTapHA1_Demo.jpg", "/BaiTapHA2_Demo.jpg", "/BaiTapHA3_Demo.jpg"], comment: "Bách Hợp đã nắm chắc kiến thức, tuy nhiên cần chú ý phần sắp xếp thứ tự phân số. Bài tập làm đúng 23/25 câu.", strengths: ["Nắm chắc kiến thức về phân số", "Thực hiện tốt phần cộng trừ phân số", "Bài làm cẩn thận, trình bày rõ ràng"], improvements: ["Cần chú ý hơn ở phần sắp xếp thứ tự phân số", "Kiểm tra lại 2 câu còn sai trước khi nộp bài"] },
     { stt: 4, name: "Nguyễn Hải Anh", score: 10.0, maxScore: 10.0, subTimeShort: "Jan 8, 2026", subTime: "15:00:00 8/1/2026", images: ["/BaiTapHA1_Demo.jpg", "/BaiTapHA2_Demo.jpg", "/BaiTapHA3_Demo.jpg"], comment: "Hải Anh nắm kiến thức rất chắc. Bài tập làm đúng 100%.", strengths: ["Nắm vững toàn bộ kiến thức về phân số", "Làm đúng 100% các câu hỏi", "Trình bày lời giải logic, chính xác", "Thể hiện kỹ năng tư duy toán học xuất sắc"], improvements: ["Có thể thử sức với các bài tập nâng cao về phân số khác mẫu"] }
   ];
 
@@ -253,8 +255,10 @@ export default function TeacherHomeworkTable({ userName }: { userName: string })
                       </tr>
                     </thead>
                     <tbody>{homeworkList.filter(it => filter === 'all' || it.typeKey === filter).map((item) => {
-                      const unviewedStaticCount = students.filter(s => !viewedStudentIds.includes(s.stt)).length;
-                      const unviewedApiCount = apiSubmissions.filter(sub => !sub.is_viewed).length;
+                      const hwViewedStudentIds = viewedStudentIdsByHW[item.id] ?? [4];
+                      const hwViewedApiIds = viewedApiIdsByHW[item.id] ?? [];
+                      const unviewedStaticCount = students.filter(s => !hwViewedStudentIds.includes(s.stt)).length;
+                      const unviewedApiCount = apiSubmissions.filter(sub => !hwViewedApiIds.includes(sub.id)).length;
                       const totalUnviewed = unviewedStaticCount + unviewedApiCount;
                       return (
                         <tr key={item.id} className="border-b border-slate-100 text-center hover:bg-slate-50 transition-colors">
@@ -262,7 +266,7 @@ export default function TeacherHomeworkTable({ userName }: { userName: string })
                           <td className="p-4 font-medium text-blue-900">{item.title}</td>
                           <td className={`p-4 font-bold ${item.color}`}>{item.type}</td>
                           <td className="p-4 text-slate-500">{item.deadline}</td>
-                          <td className="p-4 relative"><button onClick={() => { setActiveHW(item); setView('detail'); }} className="text-blue-600 underline font-medium hover:text-blue-800 cursor-pointer">Bấm vào để xem</button>{totalUnviewed > 0 && <span className="absolute top-2 right-4 bg-red-500 text-white text-[9px] w-4 h-4 flex items-center justify-center rounded-full shadow-sm">{totalUnviewed}</span>}</td>
+                          <td className="p-4"><span className="relative inline-block"><button onClick={() => { setActiveHW(item); setView('detail'); }} className="text-blue-600 underline font-medium hover:text-blue-800 cursor-pointer">Bấm vào để xem</button>{totalUnviewed > 0 && <span className="absolute -top-2 -right-4 bg-red-500 text-white text-[8px] w-4 h-4 flex items-center justify-center rounded-full shadow-sm">{totalUnviewed}</span>}</span></td>
                           <td className="p-4 text-slate-500 font-bold">4/40 Học sinh</td>
                         </tr>
                       );
@@ -289,7 +293,7 @@ export default function TeacherHomeworkTable({ userName }: { userName: string })
                         </tr>
                       </thead>
                       <tbody>{/* === AI-graded submissions from /grade Google Chat command — hiển thị TRƯỚC === */}{apiSubmissions.map((sub, idx) => (
-                        <tr key={sub.id} onClick={() => { if (!sub.is_viewed) markSubmissionViewed(sub.id); }} className={`border-b border-slate-100 cursor-pointer transition-colors duration-300 ${sub.is_viewed ? 'bg-white' : 'bg-[#f3f4f6]'}`}>
+                        <tr key={sub.id} onClick={() => { if (!(viewedApiIdsByHW[activeHW?.id] ?? []).includes(sub.id)) markSubmissionViewed(sub.id, activeHW?.id); }} className={`border-b border-slate-100 cursor-pointer transition-colors duration-300 ${(viewedApiIdsByHW[activeHW?.id] ?? []).includes(sub.id) ? 'bg-white' : 'bg-[#f3f4f6]'}`}>
                           <td className="p-3 text-center font-bold border-r border-slate-100 text-slate-800">{idx + 1}</td>
                           <td className="p-3 font-bold border-r border-slate-100 text-slate-700">{sub.student_name}</td>
                           <td className={`p-3 text-center border-r border-slate-100 font-bold ${scoreColor(sub.score, sub.max_score, lowGradeThreshold)}`}>{sub.score.toFixed(1)}/{sub.max_score.toFixed(1)}</td>
@@ -305,7 +309,7 @@ export default function TeacherHomeworkTable({ userName }: { userName: string })
                           <td className="p-3 font-medium text-slate-700">{'-'}</td>
                         </tr>
                       ))}{students.map((s) => (
-                        <tr key={s.stt} onClick={() => !viewedStudentIds.includes(s.stt) && setViewedStudentIds([...viewedStudentIds, s.stt])} className={`border-b border-slate-100 cursor-pointer transition-colors duration-300 ${viewedStudentIds.includes(s.stt) ? 'bg-white' : 'bg-[#f3f4f6]'}`}>
+                        <tr key={s.stt} onClick={() => { const hwIds = viewedStudentIdsByHW[activeHW?.id] ?? [4]; if (!hwIds.includes(s.stt)) setViewedStudentIdsByHW(prev => ({ ...prev, [activeHW?.id]: [...hwIds, s.stt] })); }} className={`border-b border-slate-100 cursor-pointer transition-colors duration-300 ${(viewedStudentIdsByHW[activeHW?.id] ?? [4]).includes(s.stt) ? 'bg-white' : 'bg-[#f3f4f6]'}`}>
                           <td className="p-3 text-center font-bold border-r border-slate-100 text-slate-800">{apiSubmissions.length + s.stt}</td>
                           <td className="p-3 font-bold border-r border-slate-100 text-slate-700">{s.name}</td>
                           <td className={`p-3 text-center border-r border-slate-100 font-bold ${scoreColor(s.score, s.maxScore, lowGradeThreshold)}`}>{s.score.toFixed(1)}/{s.maxScore.toFixed(1)}</td>
