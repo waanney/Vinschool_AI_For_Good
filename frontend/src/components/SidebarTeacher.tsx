@@ -1,6 +1,6 @@
 'use client';
 
-import { User, Home, LayoutGrid, Calendar, Mail, Clock, LogOut} from "lucide-react";
+import { User, Home, LayoutGrid, Calendar, Mail, Clock, LogOut } from "lucide-react";
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -39,22 +39,34 @@ export default function Sidebar() {
       <div className="flex flex-col space-y-6 w-full">
         {menuItems.map((item, index) => {
           const isActive = pathname === item.href;
+          const isDisabled = item.href === "/teacher/account" || item.href === "/teacher/calendar" || item.href === "/teacher/inbox" || item.href === "/teacher/history";
+
+          if (isDisabled) {
+            return (
+              <div key={index} className="flex flex-col items-center w-full cursor-default">
+                <div className="p-2 rounded-lg text-slate-500">
+                  {item.icon}
+                </div>
+                <span className="text-[10px] font-medium text-center px-1 text-slate-500">
+                  {item.label}
+                </span>
+              </div>
+            );
+          }
 
           return (
             <Link key={index} href={item.href} className="flex flex-col items-center group cursor-pointer w-full">
-              <div 
-                className={`p-2 rounded-lg transition-colors ${
-                  isActive 
-                    ? "bg-yellow-50 text-vinschool-gold"
-                    : "text-slate-500 group-hover:bg-blue-50 group-hover:text-blue-700"
-                }`}
+              <div
+                className={`p-2 rounded-lg transition-colors ${isActive
+                  ? "bg-yellow-50 text-vinschool-gold"
+                  : "text-slate-500 group-hover:bg-blue-50 group-hover:text-blue-700"
+                  }`}
               >
                 {item.icon}
               </div>
-              <span 
-                className={`text-[10px] font-medium text-center px-1 ${
-                  isActive ? "text-vinschool-gold" : "text-slate-500 group-hover:text-blue-700"
-                }`}
+              <span
+                className={`text-[10px] font-medium text-center px-1 ${isActive ? "text-vinschool-gold" : "text-slate-500 group-hover:text-blue-700"
+                  }`}
               >
                 {item.label}
               </span>
@@ -63,7 +75,7 @@ export default function Sidebar() {
         })}
       </div>
 
-      <button 
+      <button
         onClick={handleLogout}
         className="mt-auto flex flex-col items-center group cursor-pointer w-full pb-4"
       >
