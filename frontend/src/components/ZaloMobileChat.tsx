@@ -20,7 +20,36 @@ interface Message {
     content: React.ReactNode;
     text?: string;          // raw text for preview or other purposes
     time: string;
+    ts: number;             // timestamp for date grouping
     isAI: boolean;
+}
+
+// Vietnamese day names: CN, T2, T3, T4, T5, T6, T7
+const VI_DAYS = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
+
+/** Format a date header label: "Hôm nay" for today, "Hôm qua" for yesterday, "T7 14/03/2026" for older days */
+function formatDateHeader(ts: number): string {
+  const d = new Date(ts);
+  const now = new Date();
+  if (d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate()) {
+    return 'Hôm nay';
+  }
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  if (d.getFullYear() === yesterday.getFullYear() && d.getMonth() === yesterday.getMonth() && d.getDate() === yesterday.getDate()) {
+    return 'Hôm qua';
+  }
+  const day = VI_DAYS[d.getDay()];
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const yyyy = d.getFullYear();
+  return `${day} ${dd}/${mm}/${yyyy}`;
+}
+
+/** Get a date key (YYYY-MM-DD) from a timestamp for grouping */
+function dateKey(ts: number): string {
+  const d = new Date(ts);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 /** Convert a backend plain-text message into a styled mobile chat bubble */
@@ -74,6 +103,7 @@ export const ZaloMobileChat: React.FC = () => {
                         content: renderBackendMessage(msg),
                         text: msg.text,
                         time: msg.time,
+                        ts: Date.now(),
                         isAI: msg.is_ai,
                     }))
                 );
@@ -92,6 +122,7 @@ export const ZaloMobileChat: React.FC = () => {
                         content: renderBackendMessage(msg),
                         text: msg.text,
                         time: msg.time,
+                        ts: Date.now(),
                         isAI: msg.is_ai,
                     });
                 }
@@ -139,6 +170,7 @@ export const ZaloMobileChat: React.FC = () => {
                 sender: "Phụ huynh",
                 content: <p className="text-[13.5px]">{text}</p>,
                 time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
+                ts: Date.now(),
                 isAI: false
             };
             setMessages(prev => [...prev, userMsg]);
@@ -177,6 +209,7 @@ export const ZaloMobileChat: React.FC = () => {
                             ),
                             text: data.reply,
                             time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
+                            ts: Date.now(),
                             isAI: true
                         };
                         setMessages(prev => [...prev, aiReply]);
@@ -190,6 +223,7 @@ export const ZaloMobileChat: React.FC = () => {
                     content: <p className="text-[13.5px] text-red-600 italic">Không thể kết nối đến AI. Thử lại sau ạ.</p>,
                     text: "Không thể kết nối đến AI. Thử lại sau ạ.",
                     time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
+                    ts: Date.now(),
                     isAI: true
                 };
                 setMessages(prev => [...prev, errorReply]);
@@ -205,6 +239,7 @@ export const ZaloMobileChat: React.FC = () => {
             content: <p className="text-[13.5px]">{text}</p>,
             text,
             time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
+            ts: Date.now(),
             isAI: false
         };
 
@@ -225,33 +260,46 @@ export const ZaloMobileChat: React.FC = () => {
 
             {/* Vùng hiển thị tin nhắn */}
             <div ref={scrollRef} className="flex-1 p-3 overflow-y-auto flex flex-col gap-4 no-scrollbar">
-                <div className="text-center my-2">
-                    <span className="text-[10px] bg-gray-300/50 px-2 py-0.5 rounded-full text-gray-500 font-bold uppercase">Hôm nay</span>
-                </div>
 
                 {loading && messages.length === 0 && (
                     <div className="text-center text-gray-400 text-sm mt-4">Đang tải...</div>
                 )}
 
                 {!loading && messages.length === 0 && (
-                    <div className="text-center text-gray-400 text-xs mt-4">Chưa có tin nhắn</div>
+                    <>
+                        <div className="text-center my-2">
+                            <span className="text-[12px] bg-gray-300/50 px-3 py-1 rounded-full text-gray-500 font-bold">Hôm nay</span>
+                        </div>
+                        <div className="text-center text-gray-400 text-xs mt-4">Chưa có tin nhắn</div>
+                    </>
                 )}
 
-                {messages.map((msg) => (
-                    <div key={msg.id} className={`${msg.isAI ? 'self-start max-w-[95%]' : 'self-end max-w-[85%]'}`}>
-                        <div className={`p-4 rounded-2xl shadow-sm border ${msg.isAI
-                                ? 'bg-white rounded-tl-none border-gray-100'
-                                : 'bg-[#e2f2ff] rounded-tr-none border-blue-100'
-                            }`}>
-                            <div className="text-gray-800">
-                                {msg.content}
+                {messages.map((msg, idx) => {
+                    const prevMsg = idx > 0 ? messages[idx - 1] : null;
+                    const showDateHeader = !prevMsg || dateKey(msg.ts) !== dateKey(prevMsg.ts);
+                    return (
+                        <React.Fragment key={msg.id}>
+                            {showDateHeader && (
+                                <div className="text-center my-2">
+                                    <span className="text-[12px] bg-gray-300/50 px-3 py-1 rounded-full text-gray-500 font-bold">{formatDateHeader(msg.ts)}</span>
+                                </div>
+                            )}
+                            <div className={`${msg.isAI ? 'self-start max-w-[95%]' : 'self-end max-w-[85%]'}`}>
+                                <div className={`p-4 rounded-2xl shadow-sm border ${msg.isAI
+                                        ? 'bg-white rounded-tl-none border-gray-100'
+                                        : 'bg-[#e2f2ff] rounded-tr-none border-blue-100'
+                                    }`}>
+                                    <div className="text-gray-800">
+                                        {msg.content}
+                                    </div>
+                                    <div className={`text-[10px] mt-2 font-medium ${msg.isAI ? 'text-gray-400 text-right' : 'text-gray-400 text-right font-bold italic'}`}>
+                                        {msg.time} {!msg.isAI && "· Đã xem"}
+                                    </div>
+                                </div>
                             </div>
-                            <div className={`text-[10px] mt-2 font-medium ${msg.isAI ? 'text-gray-400 text-right' : 'text-gray-400 text-right font-bold italic'}`}>
-                                {msg.time} {!msg.isAI && "· Đã xem"}
-                            </div>
-                        </div>
-                    </div>
-                ))}
+                        </React.Fragment>
+                    );
+                })}
 
 
             </div>
