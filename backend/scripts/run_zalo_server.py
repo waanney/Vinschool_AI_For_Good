@@ -1,6 +1,6 @@
 """
 Lightweight standalone server for testing the Zalo notification API
-and chat commands (/ask, /dailysum, /demosum).
+and the ``/dailysum`` chat command.
 
 Run this directly to test the Zalo notifier -> UI connection
 without needing PostgreSQL, Milvus, or other services.
@@ -82,7 +82,7 @@ class ChatResponse(BaseModel):
 
 async def _handle_chat(sender: str, text: str) -> ChatResponse:
     """
-    Shared chat logic for /ask, /dailysum, and /demosum commands.
+    Shared chat logic for /dailysum command.
 
     Kept here as a thin wrapper so the standalone script doesn't depend
     on the full api/ package (which needs PostgreSQL/Milvus init).
@@ -91,58 +91,10 @@ async def _handle_chat(sender: str, text: str) -> ChatResponse:
     text = text.strip()
     sender = sender.strip()
 
-    # Generate a stable user-message ID and return it but do NOT push to the
-    # store — the frontend adds user messages directly to avoid duplicates.
     user_msg_id = f"user-{str(uuid.uuid4())[:8]}"
 
-    # /help command — show available commands
-    if text.lower().startswith("/help"):
-        help_text = (
-            "📋 Danh sách lệnh Zalo:\n\n"
-            "/ask <câu hỏi> — Hỏi đáp AI (Cô Hana sẽ trả lời)\n"
-            "/dailysum — Tóm tắt bài học hôm nay (AI tạo tự động)\n"
-            "/demosum — Xem bản tóm tắt mẫu (không tốn AI)\n"
-            "/help — Hiển thị danh sách lệnh này"
-        )
-        ai_msg_id = f"ai-{str(uuid.uuid4())[:8]}"
-        zalo_message_store.append({
-            "id": ai_msg_id,
-            "sender": "Cô Hana (AI)",
-            "text": help_text,
-            "time": now,
-            "is_ai": True,
-        })
-        return ChatResponse(
-            success=True, reply=help_text, is_ask=True,
-            user_msg_id=user_msg_id, ai_msg_id=ai_msg_id,
-        )
-
-    is_ask = text.startswith("/ask")
-
-    # /dailysum command — AI-generated daily summary
+    # /dailysum command — hardcoded demo summary (no AI cost) — the only active command
     if text.lower().startswith("/dailysum"):
-        try:
-            from services.chat.chat_service import get_chat_service
-            chat_service = get_chat_service()
-            summary = await chat_service.summarize_daily(channel="zalo")
-        except Exception as e:
-            summary = f"Xin lỗi, hệ thống AI đang gặp sự cố khi tạo tóm tắt. Vui lòng thử lại sau ạ."
-
-        ai_msg_id = f"ai-{str(uuid.uuid4())[:8]}"
-        zalo_message_store.append({
-            "id": ai_msg_id,
-            "sender": "Cô Hana (AI)",
-            "text": summary,
-            "time": now,
-            "is_ai": True,
-        })
-        return ChatResponse(
-            success=True, reply=summary, is_ask=True,
-            user_msg_id=user_msg_id, ai_msg_id=ai_msg_id,
-        )
-
-    # /demosum command — hardcoded demo summary (no AI cost)
-    if text.lower().startswith("/demosum"):
         ai_msg_id = f"ai-{str(uuid.uuid4())[:8]}"
         zalo_message_store.append({
             "id": ai_msg_id,
@@ -156,52 +108,8 @@ async def _handle_chat(sender: str, text: str) -> ChatResponse:
             user_msg_id=user_msg_id, ai_msg_id=ai_msg_id,
         )
 
-    if not is_ask:
-        return ChatResponse(success=True, reply="", is_ask=False, user_msg_id=user_msg_id)
-
-    question = text[4:].strip()
-    if not question:
-        hint = "Vui lòng nhập câu hỏi sau /ask ạ.\nVí dụ: /ask Bài tập Toán tuần này là gì?"
-        ai_msg_id = f"ai-{str(uuid.uuid4())[:8]}"
-        zalo_message_store.append({
-            "id": ai_msg_id,
-            "sender": "Cô Hana (AI)",
-            "text": hint,
-            "time": now,
-            "is_ai": True,
-        })
-        return ChatResponse(success=True, reply=hint, is_ask=True, user_msg_id=user_msg_id, ai_msg_id=ai_msg_id)
-
-    try:
-        from services.chat.chat_service import get_chat_service
-
-        chat_service = get_chat_service()
-        user_id = f"zalo-{sender}"
-        answer = await chat_service.answer(
-            user_id=user_id, question=question, channel="zalo", user_name=sender,
-        )
-
-        ai_msg_id = f"ai-{str(uuid.uuid4())[:8]}"
-        zalo_message_store.append({
-            "id": ai_msg_id,
-            "sender": "Cô Hana (AI)",
-            "text": answer,
-            "time": datetime.now().strftime("%H:%M"),
-            "is_ai": True,
-        })
-        return ChatResponse(success=True, reply=answer, is_ask=True, user_msg_id=user_msg_id, ai_msg_id=ai_msg_id)
-
-    except Exception as e:
-        error_text = "Xin lỗi, hệ thống AI đang gặp sự cố. Vui lòng thử lại sau ạ."
-        ai_msg_id = f"ai-{str(uuid.uuid4())[:8]}"
-        zalo_message_store.append({
-            "id": ai_msg_id,
-            "sender": "Cô Hana (AI)",
-            "text": error_text,
-            "time": datetime.now().strftime("%H:%M"),
-            "is_ai": True,
-        })
-        return ChatResponse(success=False, reply=error_text, is_ask=True, error=str(e), user_msg_id=user_msg_id, ai_msg_id=ai_msg_id)
+    # Any other message — store only, no AI reply
+    return ChatResponse(success=True, reply="", is_ask=False, user_msg_id=user_msg_id)
 
 
 # ===== Endpoints =====
@@ -263,7 +171,7 @@ async def chat_ask(request: ChatRequest):
     """
     Handle a chat message from the Zalo clone UI.
 
-    Routes /ask, /dailysum, and /demosum to ChatService.
+    Routes ``/dailysum`` to the hardcoded demo summary.
     Other messages are stored as-is without an AI reply.
     """
     return await _handle_chat(request.sender, request.text)
@@ -276,7 +184,7 @@ async def root():
         "endpoints": [
             "GET  /api/zalo/messages      — retrieve all stored messages",
             "POST /api/zalo/send-demo     — push the hardcoded demo summary to the Zalo UI",
-            "POST /api/zalo/chat          — /ask /dailysum /demosum (used by the clone UI)",
+            "POST /api/zalo/chat          — /dailysum (used by the clone UI)",
             "DELETE /api/zalo/messages    — clear all stored messages",
         ],
     }
@@ -285,7 +193,7 @@ async def root():
 if __name__ == "__main__":
     print("\n🚀 Zalo Test Server starting on http://localhost:8000")
     print("   POST   http://localhost:8000/api/zalo/send-demo    -> push the demo summary to the Zalo UI")
-    print("   POST   http://localhost:8000/api/zalo/chat         -> /ask /dailysum /demosum")
+    print("   POST   http://localhost:8000/api/zalo/chat         -> /dailysum")
     print("   GET    http://localhost:8000/api/zalo/messages     -> see stored messages")
     print("   DELETE http://localhost:8000/api/zalo/messages     -> clear messages")
     print("   Then check http://localhost:3000/zalo/desktop      -> see it in the UI\n")

@@ -45,7 +45,7 @@ python scripts/demo.py
 
 ```bash
 # 1. Setup environment
-cpenv.example .env
+cp .env.example .env
 # Edit .env với API key
 
 # 2. Start services

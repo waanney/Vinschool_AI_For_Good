@@ -5,8 +5,7 @@ Provides REST endpoints for the Zalo clone UI to fetch plain-text
 messages sent by the notification service. Also includes a demo
 endpoint to trigger a sample daily summary, a send-daily-summary
 endpoint for wiring the real workflow output, and a chat endpoint
-that handles /ask (AI Q&A), /dailysum (AI summary), and /demosum
-(hardcoded demo summary) commands.
+that handles the ``/dailysum`` command (hardcoded demo summary).
 """
 
 from datetime import datetime
@@ -62,12 +61,12 @@ class DemoSendResponse(BaseModel):
 
 class SendDailySummaryRequest(BaseModel):
     """Request body for the send-daily-summary endpoint."""
-    content: str  # The AI-generated plain text summary
+    content: str  # The plain text summary
     student_name: str = "Alex"
     class_name: str = "4B5"
 
 
-# Demo content — /send-demo uses the raw lesson data; /demosum (chat) uses parent-facing text.
+# Demo content — /send-demo uses the raw lesson data; /dailysum (chat) uses parent-facing text.
 DEMO_PLAIN_TEXT = DEMO_LESSON_CONTENT
 DEMO_PLAIN_TEXT_PARENTS = DEMO_LESSON_CONTENT_PARENTS
 
@@ -138,7 +137,7 @@ async def send_demo_notification(request: DemoSendRequest = DemoSendRequest()):
 @router.post("/send-daily-summary", response_model=DemoSendResponse)
 async def send_daily_summary(request: SendDailySummaryRequest):
     """
-    Send a daily summary notification with AI-generated content.
+    Send a daily summary notification.
 
     Stores the content as-is in the Zalo message store.
     This is the endpoint the daily content workflow calls.
@@ -184,10 +183,10 @@ async def clear_zalo_messages():
     return {"success": True, "message": "All Zalo messages cleared"}
 
 
-# ===== Chat /ask endpoint =====
+# ===== Chat /dailysum endpoint =====
 
 class ChatRequest(BaseModel):
-    """Request body for the chat endpoint (/ask, /dailysum, /demosum)."""
+    """Request body for the chat endpoint (/dailysum)."""
     sender: str = "Phụ huynh Alex"
     text: str
 
@@ -207,17 +206,12 @@ async def chat_ask(request: ChatRequest):
     """
     Handle a chat message from the Zalo clone UI.
 
-    Routes commands to the AI assistant (ChatService):
-    - /ask <question>  — AI Q&A
-    - /dailysum        — AI-generated daily lesson summary
-    - /demosum         — hardcoded demo summary (no API cost)
-
-    Both the user message and AI reply are stored in zalo_message_store
-    so the UI can display them via polling GET /messages.
+    Routes the ``/dailysum`` command to the hardcoded demo summary.
+    All other messages are stored as-is without an AI reply.
 
     Example:
         POST /api/zalo/chat
-        {"sender": "Phụ huynh Alex", "text": "/ask Bài tập Toán tuần này là gì?"}
+        {"sender": "Phụ huynh Alex", "text": "/dailysum"}
     """
     text = request.text.strip()
     sender = request.sender.strip()
@@ -234,34 +228,8 @@ async def chat_ask(request: ChatRequest):
         "is_ai": False,
     })
 
-    # Check for /dailysum prefix — AI-generated summary
+    # /dailysum — hardcoded demo summary (no AI cost) — the only active command
     if text.lower().startswith("/dailysum"):
-        try:
-            from services.chat import get_chat_service
-            chat_service = get_chat_service()
-            summary = await chat_service.summarize_daily(channel="zalo")
-        except Exception as e:
-            logger.error(f"[ZALO-CHAT] /dailysum AI error: {e}")
-            summary = "Xin lỗi, hệ thống AI đang gặp sự cố khi tạo tóm tắt. Vui lòng thử lại sau ạ."
-
-        ai_msg_id = f"ai-{str(uuid.uuid4())[:8]}"
-        zalo_message_store.append({
-            "id": ai_msg_id,
-            "sender": "Cô Hana (AI)",
-            "text": summary,
-            "time": now,
-            "is_ai": True,
-        })
-        return ChatResponse(
-            success=True,
-            reply=summary,
-            is_ask=True,
-            user_msg_id=user_msg_id,
-            ai_msg_id=ai_msg_id,
-        )
-
-    # Check for /demosum prefix — hardcoded demo summary (no AI cost)
-    if text.lower().startswith("/demosum"):
         ai_msg_id = f"ai-{str(uuid.uuid4())[:8]}"
         zalo_message_store.append({
             "id": ai_msg_id,
@@ -278,67 +246,5 @@ async def chat_ask(request: ChatRequest):
             ai_msg_id=ai_msg_id,
         )
 
-    # Check for /ask prefix
-    is_ask = text.startswith("/ask")
-    if not is_ask:
-        # Regular message — just store it, no AI reply
-        return ChatResponse(success=True, reply="", is_ask=False, user_msg_id=user_msg_id)
-
-    question = text[4:].strip()
-    if not question:
-        hint = "Vui lòng nhập câu hỏi sau /ask ạ.\nVí dụ: /ask Bài tập Toán tuần này là gì?"
-        # Store hint as AI reply
-        ai_msg_id = f"ai-{str(uuid.uuid4())[:8]}"
-        zalo_message_store.append({
-            "id": ai_msg_id,
-            "sender": "Cô Hana (AI)",
-            "text": hint,
-            "time": now,
-            "is_ai": True,
-        })
-        return ChatResponse(success=True, reply=hint, is_ask=True, user_msg_id=user_msg_id, ai_msg_id=ai_msg_id)
-
-    try:
-        # Get AI answer via ChatService
-        from services.chat import get_chat_service
-        chat_service = get_chat_service()
-
-        user_id = f"zalo-{sender}"
-        answer = await chat_service.answer(
-            user_id=user_id, question=question, channel="zalo", user_name=sender,
-        )
-
-        # Store AI reply
-        ai_msg_id = f"ai-{str(uuid.uuid4())[:8]}"
-        zalo_message_store.append({
-            "id": ai_msg_id,
-            "sender": "Cô Hana (AI)",
-            "text": answer,
-            "time": datetime.now().strftime("%H:%M"),
-            "is_ai": True,
-        })
-
-        logger.info(f"[ZALO-CHAT] /ask from {sender}: {question[:60]} → {len(answer)} chars")
-
-        return ChatResponse(success=True, reply=answer, is_ask=True, user_msg_id=user_msg_id, ai_msg_id=ai_msg_id)
-
-    except Exception as e:
-        logger.error(f"[ZALO-CHAT] Error: {e}")
-        error_text = "Xin lỗi, hệ thống AI đang gặp sự cố. Vui lòng thử lại sau ạ."
-        # Store error as AI reply
-        ai_msg_id = f"ai-{str(uuid.uuid4())[:8]}"
-        zalo_message_store.append({
-            "id": ai_msg_id,
-            "sender": "Cô Hana (AI)",
-            "text": error_text,
-            "time": datetime.now().strftime("%H:%M"),
-            "is_ai": True,
-        })
-        return ChatResponse(
-            success=False,
-            reply=error_text,
-            is_ask=True,
-            error=str(e),
-            user_msg_id=user_msg_id,
-            ai_msg_id=ai_msg_id,
-        )
+    # Any other message — store only, no AI reply
+    return ChatResponse(success=True, reply="", is_ask=False, user_msg_id=user_msg_id)

@@ -224,7 +224,7 @@ export const ZaloDesktopChat: React.FC = () => {
             return;
         }
 
-        // Regular message (not /ask) - add immediately
+        // Regular message (not a command) - add immediately
         const userMsg: Message = {
             id: Date.now(),
             sender: "Phụ huynh Alex",
@@ -365,7 +365,7 @@ export const ZaloDesktopChat: React.FC = () => {
                     </div>
                     <textarea
                         className="w-full h-full bg-transparent border-none focus:outline-none text-[14px] resize-none px-2 text-gray-600 font-medium placeholder:text-gray-300"
-                        placeholder="/ask Bài tập Toán? · /dailysum · /demosum"
+                        placeholder="Nhập /dailysum để xem tóm tắt bài học"
                         value={inputText}
                         onChange={(e) => setInputText(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSendMessage())}

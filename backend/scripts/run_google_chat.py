@@ -14,15 +14,22 @@ Usage:
 Students interact with the bot in Google Chat using:
     @Vinschool Bot /ask <question>       — AI Q&A
     @Vinschool Bot /grade                — Grade submitted homework images
-    @Vinschool Bot /dailysum             — demo daily lesson summary
+    @Vinschool Bot /hw [môn]             — Get homework for a subject
+    @Vinschool Bot /dailysum             — Daily lesson summary
+    @Vinschool Bot /help                 — List available commands
+
+    Or demo trigger phrases (see DEMO.md):
+    "Cô ơi chấm bài giúp con"           — Hardcoded /grade
+    "Cô ơi ngày mai có bài tập..."      — Hardcoded /ask
+    (and more — see GoogleChatListener.DEMO_HARDCODED)
 
 The script starts a minimal HTTP server on port 8000.
 The frontend (Next.js on port 3000) can poll this server
 for graded submissions at GET /api/teacher/submissions.
 """
 
-import sys
 import os
+import sys
 
 # Add backend to path so imports work
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -42,14 +49,19 @@ for mod_name in [
 ]:
     sys.modules.setdefault(mod_name, _mock_db)
 
+from contextlib import asynccontextmanager
+from pathlib import Path
+
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from contextlib import asynccontextmanager
+from fastapi.staticfiles import StaticFiles
+
+_BACKEND_DIR = Path(__file__).resolve().parent.parent
+_UPLOADS_DIR = _BACKEND_DIR / "uploads"
 
 from config import settings
 from utils.logger import logger
-
 
 # ===== Config check — runs before server starts =====
 
@@ -86,7 +98,7 @@ def _print_config() -> bool:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Start Google Chat listener on startup, stop on shutdown."""
-    from services.chat import get_google_chat_listener, get_chat_service
+    from services.chat import get_chat_service, get_google_chat_listener
 
     # Pre-initialize ChatService so we know it works
     try:
@@ -98,6 +110,10 @@ async def lifespan(app: FastAPI):
         yield
         return
 
+    # Prepare demo images (no-op if already done)
+    from services.chat.google_chat_listener import GoogleChatListener
+    GoogleChatListener.prepare_demo_uploads()
+
     # Start the listener
     listener = get_google_chat_listener()
     listener.start()
@@ -106,7 +122,9 @@ async def lifespan(app: FastAPI):
     print("  Now send a message in Google Chat:")
     print("    @Vinschool Bot /ask Bài tập Toán tuần này là gì?")
     print("    @Vinschool Bot /grade (kèm ảnh bài tập)")
+    print("    @Vinschool Bot /hw Toán")
     print("    @Vinschool Bot /dailysum")
+    print("    or demo trigger phrases (see DEMO.md)")
     print()
     print("  Teacher LMS dashboard:")
     print("    http://localhost:3000 (run frontend with npm run dev)")
@@ -134,12 +152,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Serve uploaded/demo images at /uploads/<path> so the LMS frontend can
+# display them (same mount as api/main.py uses in full-API mode).
+_UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=str(_UPLOADS_DIR)), name="uploads")
+
 
 @app.get("/")
 async def root():
     return {
         "status": "Google Chat demo server running",
-        "usage": "Send /ask <question>, /grade, /dailysum, or /demosum in Google Chat",
+        "usage": "Send /ask, /grade, /hw, /dailysum, /help or demo trigger phrases in Google Chat",
     }
 
 
@@ -148,11 +171,8 @@ async def root():
 # which crashes without a running Milvus instance. These inline endpoints only
 # import submission_store, which has zero heavy dependencies.
 
-from services.chat.submission_store import (
-    get_submissions,
-    get_unviewed_count,
-    mark_viewed,
-)
+from services.chat.submission_store import (get_submissions,
+                                            get_unviewed_count, mark_viewed)
 
 
 @app.get("/api/teacher/submissions")
