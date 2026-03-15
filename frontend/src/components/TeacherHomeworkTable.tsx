@@ -180,7 +180,7 @@ export default function TeacherHomeworkTable({ userName }: { userName: string })
           <div className="bg-white rounded-2xl border shadow-sm p-8 text-center animate-in fade-in duration-500">
             <button onClick={() => { if (activeMainTab === 'progress') { setReportView('detail'); setView('list'); } else { setView('detail'); } }} className="mb-4 text-sm text-blue-600 font-medium hover:underline flex items-center">← Quay lại</button>
             <h2 className="text-[14px] font-bold text-slate-800 mb-8 pb-4 border-b text-left">{activeHW?.fullTitle} - <span className="text-blue-700">{selectedStudent?.name}</span></h2>
-            <div className={`grid gap-8 ${(selectedStudent?.images?.length ?? 0) <= 2 ? 'grid-cols-2' : (selectedStudent?.images?.length ?? 0) === 3 ? 'grid-cols-3' : 'grid-cols-4'}`}>{(selectedStudent?.images ?? []).map((img: string, i: number) => (<div key={i} className="w-full aspect-3/4 border shadow-md bg-white overflow-hidden"><img src={img} className="w-full h-full object-cover" /></div>))}</div>
+            <div className={`grid gap-8 ${(selectedStudent?.images?.length ?? 0) <= 2 ? 'grid-cols-2' : (selectedStudent?.images?.length ?? 0) === 3 ? 'grid-cols-3' : 'grid-cols-4'}`}>{(selectedStudent?.images ?? []).map((img: string, i: number) => (<a key={i} href={img} target="_blank" rel="noopener noreferrer" className="w-full aspect-3/4 border shadow-md bg-white overflow-hidden block cursor-zoom-in hover:ring-2 hover:ring-blue-400 transition-all"><img src={img} className="w-full h-full object-cover" /></a>))}</div>
             <p className="mt-8 text-sm text-slate-400 italic font-medium">* Những câu sai AI sẽ gạch chân đỏ để GV dễ dàng theo dõi</p>
           </div>
         ) : activeMainTab === 'modules' ? (
@@ -339,7 +339,7 @@ export default function TeacherHomeworkTable({ userName }: { userName: string })
                         <div className="bg-slate-50 rounded-lg p-3"><span className="text-slate-500">Thời gian:</span> <span className="font-medium">{new Date(selectedSubmission.graded_at).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}</span></div>
                       </div>
                       {(selectedSubmission.detailed_feedback || selectedSubmission.feedback) && <div className="mb-4"><h4 className="text-sm font-bold text-slate-700 mb-2">Nhận xét từ Cô Hana:</h4><p className="text-sm text-slate-600 bg-blue-50 rounded-lg p-3 leading-relaxed whitespace-pre-line">{selectedSubmission.detailed_feedback || selectedSubmission.feedback}</p></div>}
-                      {selectedSubmission.attachment_paths && selectedSubmission.attachment_paths.length > 0 && <div><h4 className="text-sm font-bold text-slate-700 mb-2">Ảnh bài tập đã nộp:</h4><div className="grid grid-cols-3 gap-4">{selectedSubmission.attachment_paths.map((p: string, i: number) => <div key={i} className="w-full aspect-3/4 border shadow-md bg-white overflow-hidden"><img src={`${API_BASE}/uploads/${p}`} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).src = '/BaiTapHS1_Demo.jpg'; }} /></div>)}</div></div>}
+                      {selectedSubmission.attachment_paths && selectedSubmission.attachment_paths.length > 0 && <div><h4 className="text-sm font-bold text-slate-700 mb-2">Ảnh bài tập đã nộp:</h4><div className="grid grid-cols-3 gap-4">{selectedSubmission.attachment_paths.map((p: string, i: number) => <a key={i} href={`${API_BASE}/uploads/${p}`} target="_blank" rel="noopener noreferrer" className="w-full aspect-3/4 border shadow-md bg-white overflow-hidden block cursor-zoom-in hover:ring-2 hover:ring-blue-400 transition-all"><img src={`${API_BASE}/uploads/${p}`} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).src = '/BaiTapHS1_Demo.jpg'; }} /></a>)}</div></div>}
                     </div>
                   </div>
                 )}
@@ -359,9 +359,9 @@ export default function TeacherHomeworkTable({ userName }: { userName: string })
                       <div>
                         <h4 className="text-sm font-bold text-slate-700 mb-2">Ảnh bài tập đã nộp:</h4>
                         <div className={`grid gap-4 ${selectedStaticStudent.images.length <= 2 ? 'grid-cols-2' : selectedStaticStudent.images.length === 3 ? 'grid-cols-3' : 'grid-cols-4'}`}>
-                          {selectedStaticStudent.images.map((img: string, i: number) => <div key={i} className="w-full aspect-3/4 border shadow-md bg-white overflow-hidden">
+                          {selectedStaticStudent.images.map((img: string, i: number) => <a key={i} href={img} target="_blank" rel="noopener noreferrer" className="w-full aspect-3/4 border shadow-md bg-white overflow-hidden block cursor-zoom-in hover:ring-2 hover:ring-blue-400 transition-all">
                             <img src={img} className="w-full h-full object-cover" />
-                          </div>)}
+                          </a>)}
                         </div>
                       </div>
                     </div>
