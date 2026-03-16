@@ -5,7 +5,7 @@ Handles student-specific operations like asking questions and submitting homewor
 
 from typing import Optional, List
 from uuid import UUID
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Body
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException
 from pydantic import BaseModel
 from pathlib import Path
 import aiofiles

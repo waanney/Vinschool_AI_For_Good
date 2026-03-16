@@ -414,8 +414,8 @@ class ChatService:
 
     Handles AI Q&A and daily summaries for two channels:
 
-    * **zalo** — parent-facing (``/ask``, ``/dailysum``, ``/demosum`` commands in Zalo clone UI)
-    * **gchat** — student-facing (``@BotName /ask``, ``/dailysum``, ``/demosum`` in Google Chat)
+    * **zalo** — parent-facing (``/dailysum`` command in Zalo clone UI)
+    * **gchat** — student-facing (``@BotName /ask``, ``/grade``, ``/hw``, ``/dailysum`` in Google Chat)
 
     Each channel gets its own PydanticAI agent with a tailored system
     prompt and escalation behaviour.  Every command returns a single

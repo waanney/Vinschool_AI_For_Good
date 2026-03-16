@@ -46,6 +46,9 @@ async def create_collection(collection_name: str):
     try:
         collection = milvus_client.create_document_collection(collection_name)
         
+        if collection is None:
+            raise HTTPException(status_code=503, detail="Milvus is not connected")
+
         return {
             "success": True,
             "collection_name": collection.name,

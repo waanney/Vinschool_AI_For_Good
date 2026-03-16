@@ -11,8 +11,13 @@ four slash commands embedded in the message text:
                         their scores
 - ``/hw [môn]``       — Suggest supplementary homework based on the student's
                         Milvus profile (strengths/weaknesses) and recent grades
-- ``/dailysum``       — AI-generated daily lesson summary
-- ``/demosum``        — hardcoded demo summary (no API cost)
+- ``/dailysum``       — Hardcoded daily lesson summary (real summary sent
+                        at 18:00 by scheduler)
+- ``/help``           — List available commands
+
+In addition, the bot supports **demo trigger phrases** — Vietnamese
+sentences starting with "Cô ơi …" that return hardcoded responses
+without calling the LLM.  See ``DEMO_HARDCODED`` class attribute.
 
 Any other message is silently ignored so the bot does not respond to
 every conversation in the shared space.
@@ -36,13 +41,17 @@ import json
 import os
 import shutil
 import tempfile
+from pathlib import Path
 from typing import Optional
-from uuid import uuid4, UUID
+from uuid import UUID, uuid4
 
 import httpx
-
 from config import settings
 from utils.logger import logger
+
+# Paths computed once at import time — used by demo image preparation.
+_BACKEND_DIR = Path(__file__).resolve().parent.parent.parent
+_UPLOADS_DIR = _BACKEND_DIR / "uploads" / "submissions"
 
 
 class GoogleChatListener:
@@ -51,11 +60,14 @@ class GoogleChatListener:
 
     This is a pull-based subscriber: it periodically pulls messages from
     a Pub/Sub subscription, processes slash commands (/ask, /grade,
-    /dailysum, /demosum), and replies inline.  All other messages are
-    silently ignored.
+    /hw, /dailysum) and demo trigger phrases, and replies inline.  All
+    other messages are silently ignored.
 
     Messages sent via /ask are debounced per-user (default 3s) so rapid
     follow-up messages are concatenated into a single AI request.
+
+    Demo trigger phrases ("Cô ơi chấm bài...", "Cô ơi ngày mai có...", etc.)
+    return hardcoded responses for live demos without AI cost.
     """
 
     def __init__(self, chat_service=None, debouncer=None):
@@ -323,41 +335,231 @@ class GoogleChatListener:
             return None
 
     async def _handle_dailysum(self, event: dict) -> None:
-        """
-        Handle the /dailysum command: generate an AI summary of today's
-        lessons and post it to the current Google Chat space.
-        """
-        space_name = event["space_name"]
-        thread_name = event["thread_name"]
+        """Handle the /dailysum command: return the hardcoded daily summary.
 
-        # Generate AI summary (student-facing)
-        summary = await self.chat_service.summarize_daily(channel="gchat")
-
-        # Post the summary in the thread
-        await self._reply_to_chat(space_name, summary, thread_name)
-
-    async def _handle_demosum(self, event: dict) -> None:
+        The real AI-generated summary is sent automatically at 18:00 by
+        the scheduler. /dailysum just returns the static demo content
+        so the demo always works without calling the LLM.
         """
-        Handle the /demosum command: post the hardcoded demo daily
-        lesson summary to the current Google Chat space.
-        """
-        from services.scheduler import DEMO_LESSON_CONTENT_STUDENTS
+        from services.scheduler import DEMO_LESSON_CONTENT
 
         space_name = event["space_name"]
         thread_name = event["thread_name"]
+        await self._reply_to_chat(space_name, DEMO_LESSON_CONTENT, thread_name)
 
-        await self._reply_to_chat(space_name, DEMO_LESSON_CONTENT_STUDENTS, thread_name)
+    # =====================================================================
+    # Demo hardcoded responses — keyed by trigger phrase prefix.
+    # Values are plain-text replies (no AI cost).  The user will replace
+    # the placeholder strings before the demo.
+    # =====================================================================
+
+    DEMO_HARDCODED = {
+        # 1. "Cô ơi ngày mai có..." → hardcoded /ask (no escalation)
+        "cô ơi ngày mai có": (
+            "Chào con,\n"
+            "Ngày mai (Thứ 2) là hạn nộp bài tập ESL Unit 7, pages 84-89 trong sách Workbook con nhé.\n"
+            "Con nhớ hoàn thành và nộp bài đúng hạn nha!"
+        ),
+        # 2. "Cô ơi con chưa hiểu..." → hardcoded /ask (no escalation)
+        "cô ơi con chưa hiểu": (
+            "Chào con, đây là một câu hỏi rất hay và thú vị đó!\n\n"
+
+            "Trong bài học con đã được học, khi dù rơi xuống, có hai lực chính tác dụng:\n"
+            " - Trọng lực (gravity) kéo dù xuống.\n"
+            " - Lực cản không khí (air resistance) đẩy lên trên.\n"
+            "Dù lớn có diện tích bề mặt lớn hơn nên chặn nhiều không khí hơn khi rơi. Vì vậy lực cản không khí mạnh hơn.\n"
+            "Lực cản lớn hơn làm giảm tốc độ rơi. Không khí “đẩy ngược lại” mạnh hơn → dù rơi chậm hơn.\n"
+            "Như vậy, chiếc dù lớn rơi chậm hơn vì diện tích lớn tạo ra lực cản không khí (air resistance) tác dụng lên nó lớn hơn.\n\n"
+
+            "Nếu con còn gì không hiểu, con cứ hỏi cô nhé."
+        ),
+        # 3. "Cô ơi mai khai mạc..." → hardcoded /ask (escalation)
+        "cô ơi mai khai mạc": (
+            "Cô Hana chưa có thông tin về vấn đề này. Cô đã chuyển câu hỏi đến giáo viên chủ nhiệm, thầy/cô sẽ phản hồi sớm nhất nhé con!"
+        ),
+        # 4. "Cô ơi chấm bài..." → hardcoded /grade
+        #    WITH images  → hardcoded grading result
+        #    WITHOUT images → DEMO_GRADE_NO_IMAGES
+        "cô ơi chấm bài": None,  # handled specially in _handle_demo_phrase
+        # 5. "Cô ơi cho con bài tập..." → hardcoded /hw
+        "cô ơi cho con bài tập": (
+            "Cô rất vui khi con muốn luyện tập thêm để nắm vững kiến thức này. Tinh thần học tập của con rất đáng khen!\n"
+            "Dưới đây là link bài tập thêm để con luyện tập nhé:\n\n"
+
+            "https://docs.google.com/document/d/1MI92CYi-ROlN50Qx1-xqLrkiWbpqtQ8e/edit\n\n"
+
+            "Con hãy nhớ lại bài học nhé, bước quan trọng nhất là phải **quy đồng mẫu số** trước khi cộng hoặc trừ.\n\n"
+
+            "Sau khi làm xong, nếu con muốn, con có thể gửi bài cho cô xem. Chúc con làm bài thật tốt nhé!"
+        ),
+    }
+
+    # Two real student homework scans used as hardcoded attachments for the
+    # demo grade trigger.  prepare_demo_uploads() copies them to the uploads
+    # dir with deterministic names so the LMS UI can display them.
+    DEMO_IMAGE_SOURCES: list[Path] = [
+        _BACKEND_DIR / "data" / "2. Bài tập học sinh làm và chụp ảnh gửi" / "Page 1.jpg",
+        _BACKEND_DIR / "data" / "2. Bài tập học sinh làm và chụp ảnh gửi" / "Page 2.jpg",
+    ]
+    # Paths relative to the /uploads/ static mount root (i.e. relative to
+    # backend/uploads/).  Stored as attachment_paths in submission_store.
+    DEMO_IMAGE_PATHS: list[str] = [
+        "submissions/demo_grade_1.jpg",
+        "submissions/demo_grade_2.jpg",
+    ]
+
+    DEMO_GRADE_NO_IMAGES = "Vui lòng đính kèm hình ảnh bài tập ạ."
+
+    @classmethod
+    def prepare_demo_uploads(cls) -> None:
+        """Copy demo homework images to the uploads dir with fixed names.
+
+        Safe to call repeatedly — skips files that already exist.
+        Called from the lifespan of run_google_chat.py so the images are
+        ready before any submission is stored.
+        """
+        _UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+        for src, dest_name in zip(
+            cls.DEMO_IMAGE_SOURCES,
+            ["demo_grade_1.jpg", "demo_grade_2.jpg"],
+        ):
+            dest = _UPLOADS_DIR / dest_name
+            if not dest.exists():
+                if src.exists():
+                    shutil.copy2(src, dest)
+                    logger.info(f"[GCHAT] Demo image prepared: {dest.name}")
+                else:
+                    logger.warning(f"[GCHAT] Demo image source not found: {src}")
+
+    async def _handle_demo_phrase(self, event: dict, trigger: str) -> None:
+        """Handle a demo trigger phrase with a hardcoded response.
+
+        Special cases that mirror real command flows:
+
+        * ``cô ơi mai khai mạc`` — sends the hardcoded reply **and**
+          fires ``_send_escalation_email()`` exactly like the real
+          ``/ask`` escalation path.
+        * ``cô ơi chấm bài`` — behaves like real ``/grade``: sends a
+          "đang chấm bài…" processing indicator, then posts the
+          hardcoded grading result, and pushes the submission to
+          ``submission_store`` so it appears on the LMS dashboard.
+        """
+        space_name = event["space_name"]
+        thread_name = event["thread_name"]
+        user_name = event["user_name"]
+        user_id = event["user_id"]
+        attachments = event.get("attachments", [])
+
+        # --- "Cô ơi chấm bài" — mirror real /grade flow ---
+        if trigger == "cô ơi chấm bài":
+            if not attachments:
+                await self._reply_to_chat(
+                    space_name, self.DEMO_GRADE_NO_IMAGES, thread_name
+                )
+                return
+
+            # 1) Processing indicator (same as real /grade)
+            await self._reply_to_chat(
+                space_name,
+                f"Cô Hana đang chấm bài của {user_name}... "
+                f"({len(attachments)} ảnh)",
+                thread_name,
+            )
+
+            # 2) Hardcoded grading result (replaces AI grading)
+            score = 8.5
+            max_score = 10.0
+            feedback = (
+                "Nhìn chung con đã làm khá tốt bài tập này. "
+                "Con hiểu được hầu hết các dạng bài và làm đúng nhiều câu. "
+                "Tuy nhiên, vẫn còn một vài lỗi nhỏ liên quan đến "
+                "cộng trừ phân số có mẫu số khác nhau và quy đồng mẫu số."
+            )
+            detailed_feedback = (
+                "Kết quả chấm bài:\n"
+                "1. Fraction Calculations\n"
+                "c) 2/8 + 1/4 = 3/8 ❌\n"
+                "1/4 = 2/8\n"
+                "2/8 + 2/8 = 4/8 = 1/2\n\n"
+                "d) 3/4 \u2212 1/4 = 1/3 ❌\n"
+                "Đúng phải là: 2/4 = 1/2\n\n"
+                "2. Pizza Word Problems\n"
+                "D: 1/2 pizza =\n"
+                "8 \u00d7 1/2 = 4 slices\n"
+                "Con ghi 3 slices ❌\n\n"
+                "Ngoài những lỗi nhỏ trên, các phần còn lại con làm rất tốt, "
+                "đặc biệt là các bài toán tình huống và ước lượng phân số.\n\n"
+                "Cô mong con sẽ luyện thêm các bài cộng trừ phân số khác mẫu số "
+                "để tránh nhầm lẫn khi quy đồng.\n\n"
+                "Con có muốn làm thêm một vài bài tập luyện tập về cộng trừ "
+                "phân số với mẫu số khác nhau không?"
+            )
+
+            # 3) Push to submission_store → appears in LMS dashboard
+            from services.chat.submission_store import add_submission
+
+            add_submission(
+                student_id=f"gchat-{user_id}",
+                student_name=user_name,
+                score=score,
+                max_score=max_score,
+                feedback=feedback,
+                detailed_feedback=detailed_feedback,
+                attachment_paths=self.DEMO_IMAGE_PATHS,
+                subject="Mathematics",
+                assignment_title="Google Chat Submission",
+                details={},
+            )
+
+            # 4) Build reply (same structure as real /grade reply)
+            reply_parts = [
+                f"Kết quả chấm bài của {user_name}:",
+                f"Điểm: {score:.1f}/{max_score:.1f}",
+                f"\nNhận xét:\n{feedback}",
+                f"\nChi tiết:\n{detailed_feedback}",
+            ]
+            await self._reply_to_chat(
+                space_name, "\n".join(reply_parts), thread_name
+            )
+            return
+
+        # --- "Cô ơi mai khai mạc" — mirror real /ask escalation flow ---
+        if trigger == "cô ơi mai khai mạc":
+            reply = self.DEMO_HARDCODED[trigger]
+            await self._reply_to_chat(space_name, reply, thread_name)
+
+            # Fire real escalation email (same as ChatService escalation)
+            from services.chat.chat_service import _send_escalation_email
+
+            await _send_escalation_email(
+                user_id=f"gchat-{user_id}",
+                user_name=user_name,
+                question=event["text"].strip(),
+            )
+            return
+
+        # --- All other demo triggers — simple hardcoded reply ---
+        reply = self.DEMO_HARDCODED[trigger]
+        await self._reply_to_chat(space_name, reply, thread_name)
 
     async def _process_event(self, event: dict) -> None:
         """
         Process a parsed Google Chat event.
 
-        Responds to five commands:
+        Responds to slash commands and demo trigger phrases:
+
+        Slash commands:
         - /ask <question>  — AI Q&A (debounced, student persona)
         - /grade           — Grade submitted homework images
         - /hw [môn]        — Suggest supplementary homework
-        - /dailysum        — AI-generated lesson summary for today
-        - /demosum         — hardcoded demo summary (no AI cost)
+        - /dailysum        — Hardcoded lesson summary (real one sent at 18:00)
+
+        Demo trigger phrases (hardcoded, no AI cost):
+        - "Cô ơi ngày mai có..."     → /ask demo (no escalation)
+        - "Cô ơi con chưa hiểu..."   → /ask demo (no escalation)
+        - "Cô ơi mai khai mạc..."    → /ask demo (escalation)
+        - "Cô ơi chấm bài..."        → /grade demo
+        - "Cô ơi cho con bài tập..." → /hw demo
 
         All other messages are silently ignored so the bot doesn't respond
         to every conversation in the shared space.
@@ -377,39 +579,40 @@ class GoogleChatListener:
                 "/ask <câu hỏi> — Hỏi đáp AI (Cô Hana sẽ trả lời)\n"
                 "/grade — Chấm bài tập (đính kèm ảnh bài làm)\n"
                 "/hw [môn] — Gợi ý bài tập bổ sung (dựa trên hồ sơ học sinh)\n"
-                "/dailysum — Tóm tắt bài học hôm nay (AI tạo tự động)\n"
-                "/demosum — Xem bản tóm tắt mẫu (không tốn AI)\n"
+                "/dailysum — Tóm tắt bài học hôm nay\n"
                 "/help — Hiển thị danh sách lệnh này"
             )
             await self._reply_to_chat(space_name, help_text, thread_name)
             return
 
-        # /dailysum — AI-generated daily summary
-        if text.lower().startswith("/dailysum"):
+        # --- Demo trigger phrases (hardcoded, checked before slash commands) ---
+        text_lower = text.lower()
+        for trigger in self.DEMO_HARDCODED:
+            if text_lower.startswith(trigger):
+                logger.info(f"[GCHAT] Demo trigger '{trigger}' from {event['user_name']}")
+                await self._handle_demo_phrase(event, trigger)
+                return
+
+        # /dailysum — hardcoded daily summary
+        if text_lower.startswith("/dailysum"):
             logger.info(f"[GCHAT] /dailysum from {event['user_name']}")
             await self._handle_dailysum(event)
             return
 
-        # /demosum — hardcoded demo daily summary (no AI cost)
-        if text.lower().startswith("/demosum"):
-            logger.info(f"[GCHAT] /demosum from {event['user_name']}")
-            await self._handle_demosum(event)
-            return
-
         # /grade — grade submitted homework images
-        if text.lower().startswith("/grade"):
+        if text_lower.startswith("/grade"):
             logger.info(f"[GCHAT] /grade from {event['user_name']}")
             await self._handle_grade(event)
             return
 
         # /hw [subject] — supplementary homework suggestions
-        if text.lower().startswith("/hw"):
+        if text_lower.startswith("/hw"):
             logger.info(f"[GCHAT] /hw from {event['user_name']}")
             await self._handle_hw(event)
             return
 
         # /ask <question> — AI Q&A
-        if text.lower().startswith("/ask"):
+        if text_lower.startswith("/ask"):
             question = text[4:].strip()
             if not question:
                 await self._reply_to_chat(
@@ -508,9 +711,8 @@ class GoogleChatListener:
             )
 
             # Grade using workflow
-            from workflow.homework_grading_workflow import (
-                HomeworkGradingWorkflow,
-            )
+            from workflow.homework_grading_workflow import \
+                HomeworkGradingWorkflow
 
             workflow = HomeworkGradingWorkflow()
             rubric = workflow.create_standard_rubric(
@@ -568,9 +770,8 @@ class GoogleChatListener:
 
             # Store grading result in Milvus so /ask can retrieve it
             try:
-                from database.repositories.grading_repository import (
-                    store_grading_result,
-                )
+                from database.repositories.grading_repository import \
+                    store_grading_result
                 await store_grading_result(
                     student_id=f"gchat-{user_id}",
                     student_name=user_name,
@@ -597,20 +798,8 @@ class GoogleChatListener:
             ]
             if feedback:
                 reply_parts.append(f"\nNhận xét:\n{feedback}")
-
-            strengths = details.get("strengths", [])
-            if strengths:
-                reply_parts.append(
-                    "\nĐiểm mạnh:\n"
-                    + "\n".join(f"- {s}" for s in strengths)
-                )
-
-            improvements = details.get("improvements", [])
-            if improvements:
-                reply_parts.append(
-                    "\nCần cải thiện:\n"
-                    + "\n".join(f"- {i}" for i in improvements)
-                )
+            if detailed_feedback:
+                reply_parts.append(f"\nChi tiết:\n{detailed_feedback}")
 
             reply_text = "\n".join(reply_parts)
             # Strip any markdown formatting characters
@@ -661,10 +850,7 @@ class GoogleChatListener:
         )
 
         try:
-            from services.chat.chat_service import (
-                ChatService,
-                CHANNEL_GCHAT,
-            )
+            from services.chat.chat_service import CHANNEL_GCHAT, ChatService
 
             service = ChatService()
             suggestions = await service.suggest_homework(

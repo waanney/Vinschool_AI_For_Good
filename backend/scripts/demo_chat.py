@@ -1,5 +1,5 @@
 """
-Demo script for the /ask chat feature.
+Demo script for the chat feature.
 
 Tests the ChatService directly (no server needed) or via HTTP
 against a running server.
@@ -14,10 +14,10 @@ Usage:
     python -m scripts.demo_chat --http
 """
 
-import sys
-import os
-import asyncio
 import argparse
+import asyncio
+import os
+import sys
 
 # Add backend to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -25,6 +25,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Load .env before importing anything else
 from dotenv import load_dotenv
+
 load_dotenv()
 
 
@@ -89,19 +90,18 @@ async def test_http():
             print("   cd backend && python -m scripts.run_zalo_server")
             return
 
-        # Test 1: /ask question
-        print("--- Test 1: /ask about math ---")
+        # Test 1: /dailysum command
+        print("--- Test 1: /dailysum (hardcoded summary) ---")
         r = await client.post(f"{base}/api/zalo/chat", json={
             "sender": "Phụ huynh Alex",
-            "text": "/ask Bài tập Toán tuần này là gì ạ?",
+            "text": "/dailysum",
         })
         data = r.json()
         print(f"Success: {data['success']}")
-        print(f"Is /ask: {data['is_ask']}")
         print(f"Reply: {data['reply'][:200]}...\n" if len(data.get('reply', '')) > 200 else f"Reply: {data.get('reply', '')}\n")
 
-        # Test 2: Regular message (no /ask)
-        print("--- Test 2: Regular message (no /ask) ---")
+        # Test 2: Regular message (no command)
+        print("--- Test 2: Regular message (no command) ---")
         r = await client.post(f"{base}/api/zalo/chat", json={
             "sender": "Phụ huynh Alex",
             "text": "Cảm ơn cô ạ!",
@@ -109,14 +109,14 @@ async def test_http():
         data = r.json()
         print(f"Success: {data['success']}, Is /ask: {data['is_ask']}, Reply: '{data.get('reply', '')}'\n")
 
-        # Test 3: /ask without question
-        print("--- Test 3: /ask without question (should get hint) ---")
+        # Test 3: /dailysum again (verify consistent response)
+        print("--- Test 3: /dailysum again (should be same) ---")
         r = await client.post(f"{base}/api/zalo/chat", json={
             "sender": "Phụ huynh Alex",
-            "text": "/ask",
+            "text": "/dailysum",
         })
         data = r.json()
-        print(f"Reply: {data.get('reply', '')}\n")
+        print(f"Reply: {data.get('reply', '')[:100]}...\n" if len(data.get('reply', '')) > 100 else f"Reply: {data.get('reply', '')}\n")
 
         # Test 4: Check messages store
         print("--- Test 4: Check stored messages ---")
@@ -133,7 +133,7 @@ async def test_http():
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Test the /ask chat feature")
+    parser = argparse.ArgumentParser(description="Test the chat feature")
     parser.add_argument("--http", action="store_true", help="Test via HTTP (requires running server)")
     args = parser.parse_args()
 

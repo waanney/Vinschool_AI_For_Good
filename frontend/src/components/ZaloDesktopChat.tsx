@@ -26,6 +26,34 @@ function formatRelativeTime(ts: number): string {
     return d.toLocaleDateString();
 }
 
+// Vietnamese day names: CN, T2, T3, T4, T5, T6, T7
+const VI_DAYS = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
+
+/** Format a date header label: "Hôm nay" for today, "Hôm qua" for yesterday, "T7 14/03/2026" for older days */
+function formatDateHeader(ts: number): string {
+  const d = new Date(ts);
+  const now = new Date();
+  if (d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate()) {
+    return 'Hôm nay';
+  }
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  if (d.getFullYear() === yesterday.getFullYear() && d.getMonth() === yesterday.getMonth() && d.getDate() === yesterday.getDate()) {
+    return 'Hôm qua';
+  }
+  const day = VI_DAYS[d.getDay()];
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const yyyy = d.getFullYear();
+  return `${day} ${dd}/${mm}/${yyyy}`;
+}
+
+/** Get a date key (YYYY-MM-DD) from a timestamp for grouping */
+function dateKey(ts: number): string {
+  const d = new Date(ts);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 interface Message {
     id: number | string;
     sender: string;
@@ -224,7 +252,7 @@ export const ZaloDesktopChat: React.FC = () => {
             return;
         }
 
-        // Regular message (not /ask) - add immediately
+        // Regular message (not a command) - add immediately
         const userMsg: Message = {
             id: Date.now(),
             sender: "Phụ huynh Alex",
@@ -325,7 +353,6 @@ export const ZaloDesktopChat: React.FC = () => {
 
                 {/* Vùng tin nhắn cuộn */}
                 <div ref={scrollRef} className="flex-1 min-h-0 p-8 overflow-y-auto flex flex-col gap-6 no-scrollbar bg-[#f4f7f9]">
-                    <div className="text-center my-2"><span className="text-[10px] bg-gray-400/60 px-7 py-1 rounded-xl text-white uppercase">Hôm nay</span></div>
 
                     {loading && messages.length === 0 && (
                         <div className="text-center text-gray-400 text-sm mt-8">Đang tải tin nhắn...</div>
@@ -337,20 +364,34 @@ export const ZaloDesktopChat: React.FC = () => {
                         </div>
                     )}
 
-                    {messages.map((msg) => (
-                        <div key={msg.id} className={`flex gap-3 ${msg.isAI ? 'self-start' : 'self-end flex-row-reverse'} max-w-[85%] md:max-w-[60%]`}>
-                            <div className={`w-8 h-8 rounded-full shrink-0 flex items-center justify-center text-white text-[10px] font-bold mt-1 ${msg.isAI ? 'bg-[#0068ff]' : 'bg-green-600'}`}>
-                                {msg.isAI ? 'AI' : 'PH'}
-                            </div>
-                            <div className={`p-4 rounded-xl shadow-[0_1px_2px_rgba(0,0,0,0.1)] border ${msg.isAI ? 'bg-white border-[#dbdee1]' : 'bg-[#e2f2ff] border-[#0068ff]/20'}`}>
-                                <p className={`text-[11px] font-bold mb-1 ${msg.isAI ? 'text-blue-700' : 'text-green-700'}`}>{msg.sender}</p>
-                                <div className="leading-relaxed">
-                                    {msg.content}
+                    {messages.map((msg, idx) => {
+                        const prevMsg = idx > 0 ? messages[idx - 1] : null;
+                        const showDateHeader = !prevMsg || dateKey(msg.ts) !== dateKey(prevMsg.ts);
+                        return (
+                            <React.Fragment key={msg.id}>
+                                {showDateHeader && (
+                                    <div className="text-center my-2"><span className="text-[12px] bg-gray-400/60 px-8 py-1.5 rounded-xl text-white">{formatDateHeader(msg.ts)}</span></div>
+                                )}
+                                <div className={`flex gap-3 ${msg.isAI ? 'self-start' : 'self-end flex-row-reverse'} max-w-[85%] md:max-w-[60%]`}>
+                                    <div className={`w-8 h-8 rounded-full shrink-0 flex items-center justify-center text-white text-[10px] font-bold mt-1 ${msg.isAI ? 'bg-[#0068ff]' : 'bg-green-600'}`}>
+                                        {msg.isAI ? 'AI' : 'PH'}
+                                    </div>
+                                    <div className={`p-4 rounded-xl shadow-[0_1px_2px_rgba(0,0,0,0.1)] border ${msg.isAI ? 'bg-white border-[#dbdee1]' : 'bg-[#e2f2ff] border-[#0068ff]/20'}`}>
+                                        <p className={`text-[11px] font-bold mb-1 ${msg.isAI ? 'text-blue-700' : 'text-green-700'}`}>{msg.sender}</p>
+                                        <div className="leading-relaxed">
+                                            {msg.content}
+                                        </div>
+                                        <div className="text-[10px] text-gray-400 text-left mt-2 font-bold opacity-70">{msg.time}</div>
+                                    </div>
                                 </div>
-                                <div className="text-[10px] text-gray-400 text-left mt-2 font-bold opacity-70">{msg.time}</div>
-                            </div>
-                        </div>
-                    ))}
+                            </React.Fragment>
+                        );
+                    })}
+
+                    {/* Show "Hôm nay" header when there are no messages */}
+                    {!loading && messages.length === 0 && (
+                        <div className="text-center my-2"><span className="text-[12px] bg-gray-400/60 px-8 py-1.5 rounded-xl text-white">Hôm nay</span></div>
+                    )}
 
 
                 </div>
@@ -365,7 +406,7 @@ export const ZaloDesktopChat: React.FC = () => {
                     </div>
                     <textarea
                         className="w-full h-full bg-transparent border-none focus:outline-none text-[14px] resize-none px-2 text-gray-600 font-medium placeholder:text-gray-300"
-                        placeholder="/ask Bài tập Toán? · /dailysum · /demosum"
+                        placeholder="Nhập /dailysum để xem tóm tắt bài học"
                         value={inputText}
                         onChange={(e) => setInputText(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSendMessage())}

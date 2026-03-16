@@ -1,7 +1,7 @@
 # Vinschool AI Educational Support System
 
 Multi-agent AI system for educational support built with PydanticAI, Milvus, and FastAPI.
-H
+
 ## Features
 
 ### Teaching Assistant Agent
@@ -26,7 +26,7 @@ H
 - **Two-Tier Feedback**: Concise feedback (≤100 chars, for Google Chat reply & LMS table) and detailed feedback (4-6 sentence paragraph from Cô Hana, for email & LMS detail modal)
 - **Cô Hana Persona**: AI always speaks as "Cô Hana"
 - **Vietnamese Name Convention**: Uses last 2 words of student's full name; preserves diacritical marks exactly as received
-- **Milvus Grading Storage**: After grading, results (score, feedback, strengths, improvements) are stored in Milvus so students can later `/ask` about their grades
+- **Milvus Grading Storage**: After grading, results (score, feedback, detailed feedback) are stored in Milvus so students can later `/ask` about their grades
 - **Teacher Override**: Teachers can review and adjust AI grades
 
 ### Notification Service
@@ -43,13 +43,14 @@ H
 ### Interactive Chat Service (Cô Hana)
 
 - **Channel-Aware AI**: Two separate personas — parent-facing (Zalo) and student-facing (Google Chat)
-- **Zalo commands**: `/ask <question>` (AI Q&A), `/dailysum` (AI-generated daily summary), `/demosum` (hardcoded demo summary — no API cost), `/help` (list commands)
-- **Google Chat commands**: `/ask`, `/dailysum`, `/demosum`, `/grade` (submit homework images for AI grading), `/help` (list commands) when @mentioning the bot; any other mention is silently ignored
+- **Zalo commands**: `/dailysum` (hardcoded demo summary — no API cost)
+- **Google Chat commands**: `/ask`, `/grade`, `/hw`, `/dailysum`, `/help` when @mentioning the bot; any other mention is silently ignored
+- **Demo Trigger Phrases** (Google Chat only): Natural-language phrases like `Cô ơi chấm bài...`, `Cô ơi ngày mai có...` etc. return hardcoded responses for live demos — no AI cost. See [DEMO.md](DEMO.md) for the full list.
 - **Single-Message Flow**: Every command returns exactly one reply — no intermediate "thinking" or typing indicator messages
 - **Message Debouncing**: Rapid messages from the same user are batched (3s quiet window) into a single AI request
 - **Conversation History**: Per-user history (last 10 messages) for contextual follow-ups
 - **Smart Escalation**: Zalo → polite apology only; Google Chat → email to teacher + student notification
-- **Grading Context Retrieval**: When a student `/ask`s about their grades, Milvus is queried for relevant grading results which are injected into the LLM prompt so Cô Hana can answer with actual score, feedback, strengths, and improvements
+- **Grading Context Retrieval**: When a student `/ask`s about their grades, Milvus is queried for relevant grading results which are injected into the LLM prompt so Cô Hana can answer with actual score, feedback, and detailed feedback
 - **Lesson Context**: AI answers are grounded in lesson data — reads from **Milvus** in production, falls back to `data/lesson.txt` for local development
 
 ## Architecture
@@ -144,7 +145,7 @@ H
    ```bash
    DEFAULT_PROVIDER=google
    GEMINI_API_KEY=your-gemini-api-key
-   DEFAULT_LLM_MODEL=gemini-1.5-pro
+   DEFAULT_LLM_MODEL=gemini-2.5-pro
    ```
 
    **Option 3: Anthropic**
@@ -167,7 +168,7 @@ H
 
 ### Development Setup (Without Docker)
 
-**Using uv (recommended - faster)**
+#### Using uv (recommended - faster)
 
 ```bash
 # Install uv if not already installed
@@ -186,7 +187,7 @@ docker-compose up -d milvus postgres
 uvicorn api.main:app --reload
 ```
 
-**Using pip**
+#### Using pip
 
 ```bash
 pip install -e .[dev]
@@ -240,45 +241,49 @@ curl -X POST "http://localhost:8000/api/student/homework/submit" \
 ```text
 backend/
 ├── agents/                  # PydanticAI agents
-│   ├── base/                # Base agent classes
-│   ├── teaching_assistant/  # Q&A, summarization, exercises
-│   ├── content_processor/   # Document processing
-│   └── grading/             # Homework grading
+│   ├── base/                       # Base agent classes
+│   ├── teaching_assistant/         # Q&A, summarization, exercises
+│   ├── content_processor/          # Document processing
+│   └── grading/                    # Homework grading
 ├── api/                     # FastAPI application
-│   ├── main.py              # App initialization
-│   └── routes/              # API endpoints
+│   ├── main.py                     # App initialization
+│   └── routes/                     # API endpoints
 ├── config/                  # Configuration management
 ├── database/                # Database clients
-│   ├── milvus_client.py     # Milvus vector DB
-│   ├── postgres_client.py   # PostgreSQL
-│   └── repositories/        # Data access layer
-│       ├── document_repository.py   # Document storage
-│       └── grading_repository.py    # Grading results → Milvus
+│   ├── milvus_client.py            # Milvus vector DB
+│   ├── postgres_client.py          # PostgreSQL
+│   └── repositories/               # Data access layer
+│       ├── daily_lesson_repository.py     # Daily lesson storage
+│       ├── document_repository.py         # Document storage
+│       ├── grading_repository.py          # Grading results → Milvus
+│       └── student_profile_repository.py  # Student profile storage
 ├── domain/                  # Domain models (DDD)
-│   ├── models/              # Entities
-│   └── repositories/        # Repository interfaces
+│   ├── models/                     # Entities
+│   └── repositories/               # Repository interfaces
 ├── services/                # Business services
-│   ├── chat/                # Interactive AI chat (Cô Hana)
-│   │   ├── chat_service.py          # Channel-aware LLM orchestrator
-│   │   ├── debouncer.py             # Per-user message debouncing
-│   │   ├── google_chat_listener.py  # Pub/Sub consumer + Chat API replier
-│   │   └── submission_store.py      # In-memory store for /grade submissions
-│   ├── scheduler.py         # 6pm daily summary scheduler + /dailysum trigger
-│   └── notification/        # Notification service
-│       ├── models.py                # Notification data models
-│       ├── base.py                  # BaseNotifier interface
-│       ├── email_notifier.py        # SMTP email (escalation + low grade)
-│       ├── google_chat_notifier.py  # Google Chat (daily summary only)
-│       ├── zalo_notifier.py         # Zalo clone UI (in-memory store → REST polling)
-│       └── notification_service.py  # Main orchestrator + factory methods
+│   ├── chat/                       # Interactive AI chat (Cô Hana)
+│   │   ├── chat_service.py                # Channel-aware LLM orchestrator
+│   │   ├── debouncer.py                   # Per-user message debouncing
+│   │   ├── google_chat_listener.py        # Pub/Sub consumer + Chat API replier
+│   │   └── submission_store.py            # In-memory store for /grade submissions
+│   ├── scheduler.py                # 6pm daily summary scheduler + /dailysum trigger
+│   └── notification/               # Notification service
+│       ├── models.py                      # Notification data models
+│       ├── base.py                        # BaseNotifier interface
+│       ├── email_notifier.py              # SMTP email (escalation + low grade)
+│       ├── google_chat_notifier.py        # Google Chat (daily summary only)
+│       ├── zalo_notifier.py               # Zalo clone UI (in-memory store → REST polling)
+│       └── notification_service.py        # Main orchestrator + factory methods
 ├── utils/                   # Utilities
-│   ├── embeddings.py        # Embedding generation
-│   ├── document_parser.py   # Document parsing
-│   └── logger.py            # Logging setup
+│   ├── embeddings.py               # Embedding generation
+│   ├── document_parser.py          # Document parsing
+│   ├── gemini_vision.py            # Gemini 2.5 Pro image/OCR parsing
+│   └── logger.py                   # Logging setup
 ├── workflow/                # Workflow orchestration
 │   ├── daily_content_workflow.py
-│   ├── question_answering_workflow.py
-│   └── homework_grading_workflow.py
+│   ├── homework_grading_workflow.py
+│   ├── practice_exercise_workflow.py
+│   └── question_answering_workflow.py
 ├── docker-compose.yml       # Docker orchestration
 ├── Dockerfile               # Container definition
 └── pyproject.toml           # Dependencies
@@ -321,8 +326,8 @@ GRADING_LLM_MODEL=gpt-4-turbo-preview
 ```bash
 DEFAULT_PROVIDER=google
 GEMINI_API_KEY=your-gemini-key
-DEFAULT_LLM_MODEL=gemini-1.5-pro
-GRADING_LLM_MODEL=gemini-1.5-pro
+DEFAULT_LLM_MODEL=gemini-2.5-pro
+GRADING_LLM_MODEL=gemini-2.5-pro
 ```
 
 #### Anthropic (Claude)
@@ -397,15 +402,14 @@ Each notification type targets specific channels — there is no chat or reply.
 
 #### Email (SMTP) Setup
 
-**Step 1: Get Gmail App Password**
+1. **Step 1: Get Gmail App Password**
+   1. Go to [myaccount.google.com](https://myaccount.google.com)
+   2. Navigate to **Security & sign-in** → **2-Step Verification** → Turn on 2-Step Verification
+   3. Go to [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords)
+   4. Type name in **App name**: Vinschool AI (your choice)
+   5. Click **Create** and copy the 16-character password (`abcd efgh ijkl mnop`)
 
-1. Go to [myaccount.google.com](https://myaccount.google.com)
-2. Navigate to **Security & sign-in** → **2-Step Verification** → Turn on 2-Step Verification
-3. Go to [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords)
-4. Type name in **App name**: Vinschool AI (your choice)
-5. Click **Create** and copy the 16-character password (`abcd efgh ijkl mnop`)
-
-**Step 2: Configure `.env`**
+2. **Step 2: Configure `.env`**
 
 ```bash
 ENABLE_EMAIL_NOTIFICATIONS=true
@@ -473,12 +477,13 @@ The Zalo channel stores plain-text messages in-memory; the frontend polls `GET /
 
 **Zalo API endpoints:**
 
-| Method   | Endpoint              | Description                                                                           |
-| -------- | --------------------- | ------------------------------------------------------------------------------------- |
-| `GET`    | `/api/zalo/messages`  | List all stored messages                                                              |
-| `POST`   | `/api/zalo/send-demo` | Send the hardcoded daily summary to the Zalo UI                                       |
-| `POST`   | `/api/zalo/chat`      | `/ask` — AI Q&A; `/dailysum` — AI summary; `/demosum` — demo; `/help` — list commands |
-| `DELETE` | `/api/zalo/messages`  | Clear all messages                                                                    |
+| Method   | Endpoint                       | Description                                     |
+| -------- | ------------------------------ | ----------------------------------------------- |
+| `GET`    | `/api/zalo/messages`           | List all stored messages                        |
+| `POST`   | `/api/zalo/send-demo`          | Send the hardcoded daily summary to the Zalo UI |
+| `POST`   | `/api/zalo/chat`               | `/dailysum` — hardcoded demo summary            |
+| `DELETE` | `/api/zalo/messages`           | Clear all messages                              |
+| `POST`   | `/api/zalo/send-daily-summary` | Send AI-generated daily summary to Zalo UI      |
 
 **Submission API endpoints** (populated by Google Chat `/grade` command):
 
@@ -497,11 +502,11 @@ The Zalo channel stores plain-text messages in-memory; the frontend polls `GET /
 
 **Daily lesson API endpoints:**
 
-| Method | Endpoint                            | Description                              |
-| ------ | ----------------------------------- | ---------------------------------------- |
-| `POST` | `/api/teacher/daily-lesson`              | Upload a daily lesson entry (JSON) to Milvus                                   |
+| Method | Endpoint                                | Description                                                                     |
+| ------ | --------------------------------------- | ------------------------------------------------------------------------------- |
+| `POST` | `/api/teacher/daily-lesson`             | Upload a daily lesson entry (JSON) to Milvus                                    |
 | `POST` | `/api/teacher/daily-lesson/parse-image` | Upload a lesson image, parse it with Gemini 2.5 Pro vision, and store in Milvus |
-| `GET`  | `/api/teacher/daily-lessons/{date}`     | Retrieve all lessons for a specific date                                       |
+| `GET`  | `/api/teacher/daily-lessons/{date}`     | Retrieve all lessons for a specific date                                        |
 
 > **Note:** Zalo uses an in-memory store — messages are lost when the server restarts. For production, replace with Zalo OA API integration. Submissions also use an in-memory store for the demo. Uploaded images are persisted in `uploads/submissions/` and served as static files at `/uploads/`.
 
@@ -520,12 +525,12 @@ The Zalo channel stores plain-text messages in-memory; the frontend polls `GET /
 
 The Chat Service provides **bidirectional** AI Q&A. Students and parents can ask questions and receive instant answers grounded in `data/lesson.txt`.
 
-| Channel     | Audience | Commands                                                      | Persona               | Escalation Behaviour           |
-| ----------- | -------- | ------------------------------------------------------------- | --------------------- | ------------------------------ |
-| Zalo clone  | Parents  | `/ask <question>`, `/dailysum`, `/demosum`, `/help`           | Kính ngữ (formal)     | Apologise — no email           |
-| Google Chat | Students | `/ask <question>`, `/grade`, `/dailysum`, `/demosum`, `/help` | Thân thiện (friendly) | Email teacher + notify student |
+| Channel     | Audience | Commands                                                       | Persona               | Escalation Behaviour           |
+| ----------- | -------- | -------------------------------------------------------------- | --------------------- | ------------------------------ |
+| Zalo clone  | Parents  | `/dailysum`                                                    | Kính ngữ (formal)     | N/A                            |
+| Google Chat | Students | `/ask <question>`, `/grade`, `/hw [môn]`, `/dailysum`, `/help` | Thân thiện (friendly) | Email teacher + notify student |
 
-> **Google Chat prefix required**: The bot only responds to messages that start with `/ask`, `/grade`, `/dailysum`, `/demosum`, or `/help`. Any other @mention is silently ignored.
+> **Google Chat prefix required**: The bot responds to slash commands (`/ask`, `/grade`, `/hw`, `/dailysum`, `/help`) and demo trigger phrases (see [DEMO.md](DEMO.md)). Other @mentions are silently ignored.
 
 **Key features:**
 
@@ -543,51 +548,55 @@ cd backend && python -m scripts.run_zalo_server
 cd frontend && npm run dev
 ```
 
-1. Open [http://localhost:3000/zalo-desktop](http://localhost:3000/zalo-desktop) (or [http://localhost:3000/zalo-mobile](http://localhost:3000/zalo-mobile)) to access the Zalo clone UI
-2. Type `/ask Bài tập Toán tuần này là gì?` in the chat
-3. Type `/dailysum` to get an AI-generated daily summary
-4. Type `/demosum` to get the hardcoded demo summary (no API cost)
+1. Open [http://localhost:3000/zalo/desktop](http://localhost:3000/zalo/desktop) (or [http://localhost:3000/zalo/mobile](http://localhost:3000/zalo/mobile)) to access the Zalo clone UI
+2. Type `/dailysum` to get the hardcoded demo summary (no API cost)
 
-Or test from terminal:
-
-```bash
-# Ask a question
-curl -X POST http://localhost:8000/api/zalo/chat \
-  -H "Content-Type: application/json" \
-  -d '{"sender": "Phụ huynh Alex", "text": "/ask Bài tập Toán tuần này là gì?"}'
-
-# AI-generated daily summary
-curl -X POST http://localhost:8000/api/zalo/chat \
-  -H "Content-Type: application/json" \
-  -d '{"sender": "Phụ huynh Alex", "text": "/dailysum"}'
-
-# Hardcoded demo summary (no API cost)
-curl -X POST http://localhost:8000/api/zalo/chat \
-  -H "Content-Type: application/json" \
-  -d '{"sender": "Phụ huynh Alex", "text": "/demosum"}'
-```
-
-#### Google Chat commands
-
-Students use `/ask`, `/dailysum`, or `/demosum` when @mentioning the bot. Run the listener:
+#### Google Chat commands — Quick Test
 
 ```bash
 cd backend && python -m scripts.run_google_chat
 ```
 
-The bot responds to `/ask`, `/grade`, `/hw`, `/dailysum`, `/demosum`, and `/help` prefixes. For example:
+Send in Google Chat:
+
+- `@Vinschool Bot /ask Bài tập Toán tuần này là gì?`
+- `@Vinschool Bot /grade` (kèm ảnh bài tập)
+- `@Vinschool Bot /hw Toán`
+- `@Vinschool Bot /dailysum`
+- `@Vinschool Bot Cô ơi ngày mai có bài tập nào tới hạn không?` (demo trigger)
+
+See [DEMO.md](DEMO.md) for the full demo trigger phrase guide.
+
+Or test from terminal:
+
+```bash
+# Hardcoded demo summary (no API cost)
+curl -X POST http://localhost:8000/api/zalo/chat \
+  -H "Content-Type: application/json" \
+  -d '{"sender": "Phụ huynh Alex", "text": "/dailysum"}'
+```
+
+#### Google Chat commands
+
+Students use slash commands or demo trigger phrases when @mentioning the bot. Run the listener:
+
+```bash
+cd backend && python -m scripts.run_google_chat
+```
+
+The bot responds to `/ask`, `/grade`, `/hw`, `/dailysum`, and `/help` prefixes, plus demo trigger phrases (see [DEMO.md](DEMO.md)). For example:
 
 - `@Vinschool Bot /ask Hôm nay học bài gì?`
 - `@Vinschool Bot /grade` (attach homework images)
 - `@Vinschool Bot /hw` (suggest supplementary homework based on profile)
 - `@Vinschool Bot /hw Toán` (suggest homework for a specific subject)
 - `@Vinschool Bot /dailysum`
-- `@Vinschool Bot /demosum`
 - `@Vinschool Bot /help`
+- `@Vinschool Bot Cô ơi ngày mai có bài tập nào tới hạn không?` (demo trigger)
 
 The `/grade` command accepts attached images, grades them using Gemini Vision API, persists the images in `uploads/submissions/`, stores the result in the LMS dashboard, stores the grading result in Milvus (for later `/ask` retrieval), and sends a low-grade alert email if the score is below `LOW_GRADE_THRESHOLD`. All timestamps are stored in UTC with timezone info so the LMS displays the correct local time.
 
-After grading, if the same student uses `/ask` to ask about their score or feedback, Cô Hana retrieves the relevant grading results from Milvus and answers with actual data (score, feedback, strengths, improvements).
+After grading, if the same student uses `/ask` to ask about their score or feedback, Cô Hana retrieves the relevant grading results from Milvus and answers with actual data (score, feedback, and detailed feedback).
 
 The `/hw` command generates personalised supplementary homework suggestions based on the student's Milvus profile (strengths, weaknesses, subjects, learning level) and recent grading results. Student profiles are stored in the `vinschool_student_profiles` collection and can be created via the `POST /api/student/profile` endpoint or seeded using:
 

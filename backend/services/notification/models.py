@@ -2,9 +2,9 @@
 Notification data models for the NotificationService.
 
 This module defines Pydantic models for different notification types:
-- Teacher escalations (when AI cannot answer student questions)
-- Low grade alerts (when student score falls below threshold)
-- Daily summaries (end-of-day lesson + homework recap for students/parents)
+- Teacher escalations (when AI cannot answer student questions) -> Email
+- Low grade alerts (when student score falls below threshold) -> Email
+- Daily summaries (end-of-day lesson + homework recap) -> Google Chat (students), Zalo (parents)
 """
 
 from datetime import datetime

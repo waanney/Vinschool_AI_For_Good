@@ -110,10 +110,10 @@ export default function TeacherHomeworkTable({ userName }: { userName: string })
   }, []);
 
   const students = [
-    { stt: 1, name: "Cấn Trần Quang Bách", score: 8.0, maxScore: 10.0, subTimeShort: "Jan 4, 2026", subTime: "15:00:00 4/1/2026", images: ["/BaiTapHA1_Demo.jpg", "/BaiTapHA2_Demo.jpg", "/BaiTapHA3_Demo.jpg"], comment: "Quang Bách đã nắm khá chắc kiến thức phần cộng trừ phân số. Tuy nhiên vẫn còn một số lỗi nằm ở phần cộng trừ và so sánh phân số.", strengths: ["Nắm vững kiến thức phần cộng trừ phân số cùng mẫu", "Biết quy đổi phân số về cùng mẫu số", "Trình bày lời giải rõ ràng, có logic"], improvements: ["Cần cẩn thận hơn ở phần so sánh phân số", "Kiểm tra lại kết quả sau khi làm xong", "Ôn tập thêm phần rút gọn phân số"] },
-    { stt: 2, name: "Trần Minh Khôi", score: 7.2, maxScore: 10.0, subTimeShort: "Jan 8, 2026", subTime: "15:00:00 8/1/2026", images: ["/BaiTapHA1_Demo.jpg", "/BaiTapHA2_Demo.jpg", "/BaiTapHA3_Demo.jpg"], comment: "Minh Khôi cần ôn thêm về phần cộng/trừ phân số cùng mẫu. Bài tập làm đúng 18/25 câu.", strengths: ["Hiểu được ý nghĩa cơ bản của phân số", "Làm đúng được phần nhận diện phân số trên sơ đồ", "Có cố gắng hoàn thành đủ các câu"], improvements: ["Cần ôn luyện thêm phần cộng/trừ phân số cùng mẫu", "Chú ý quy tắc tính toán để tránh sai sót", "Rèn luyện kỹ năng rút gọn phân số"] },
-    { stt: 3, name: "Phạm Bách Hợp", score: 9.2, maxScore: 10.0, subTimeShort: "Jan 8, 2026", subTime: "15:00:00 8/1/2026", images: ["/BaiTapHA1_Demo.jpg", "/BaiTapHA2_Demo.jpg", "/BaiTapHA3_Demo.jpg"], comment: "Bách Hợp đã nắm chắc kiến thức, tuy nhiên cần chú ý phần sắp xếp thứ tự phân số. Bài tập làm đúng 23/25 câu.", strengths: ["Nắm chắc kiến thức về phân số", "Thực hiện tốt phần cộng trừ phân số", "Bài làm cẩn thận, trình bày rõ ràng"], improvements: ["Cần chú ý hơn ở phần sắp xếp thứ tự phân số", "Kiểm tra lại 2 câu còn sai trước khi nộp bài"] },
-    { stt: 4, name: "Nguyễn Hải Anh", score: 10.0, maxScore: 10.0, subTimeShort: "Jan 8, 2026", subTime: "15:00:00 8/1/2026", images: ["/BaiTapHA1_Demo.jpg", "/BaiTapHA2_Demo.jpg", "/BaiTapHA3_Demo.jpg"], comment: "Hải Anh nắm kiến thức rất chắc. Bài tập làm đúng 100%.", strengths: ["Nắm vững toàn bộ kiến thức về phân số", "Làm đúng 100% các câu hỏi", "Trình bày lời giải logic, chính xác", "Thể hiện kỹ năng tư duy toán học xuất sắc"], improvements: ["Có thể thử sức với các bài tập nâng cao về phân số khác mẫu"] }
+    { stt: 1, name: "Cấn Trần Quang Bách", score: 8.0, maxScore: 10.0, subTimeShort: "Jan 4, 2026", subTime: "15:00:00 4/1/2026", images: ["/BaiTapHA1_Demo.jpg", "/BaiTapHA2_Demo.jpg"], comment: "Quang Bách đã nắm khá chắc kiến thức phần cộng trừ phân số. Tuy nhiên vẫn còn một số lỗi nằm ở phần cộng trừ và so sánh phân số." },
+    { stt: 2, name: "Trần Minh Khôi", score: 7.2, maxScore: 10.0, subTimeShort: "Jan 8, 2026", subTime: "15:00:00 8/1/2026", images: ["/BaiTapHA1_Demo.jpg", "/BaiTapHA2_Demo.jpg", "/BaiTapHA3_Demo.jpg"], comment: "Minh Khôi cần ôn thêm về phần cộng/trừ phân số cùng mẫu. Bài tập làm đúng 18/25 câu." },
+    { stt: 3, name: "Phạm Bách Hợp", score: 9.2, maxScore: 10.0, subTimeShort: "Jan 8, 2026", subTime: "15:00:00 8/1/2026", images: ["/BaiTapHA1_Demo.jpg", "/BaiTapHA2_Demo.jpg", "/BaiTapHA3_Demo.jpg", "/BaiTapHA4_Demo.jpg"], comment: "Bách Hợp đã nắm chắc kiến thức, tuy nhiên cần chú ý phần sắp xếp thứ tự phân số. Bài tập làm đúng 23/25 câu." },
+    { stt: 4, name: "Nguyễn Hải Anh", score: 10.0, maxScore: 10.0, subTimeShort: "Jan 8, 2026", subTime: "15:00:00 8/1/2026", images: ["/BaiTapHA4_Demo.jpg"], comment: "Hải Anh nắm kiến thức rất chắc. Bài tập làm đúng 100%." }
   ];
 
   const progressAssignments = [
@@ -168,7 +168,7 @@ export default function TeacherHomeworkTable({ userName }: { userName: string })
           Các học phần
         </span>
         <span onClick={() => { setActiveMainTab('homework'); setView('list'); }} className={`px-4 py-1.5 rounded-full cursor-pointer relative transition-all ${activeMainTab === 'homework' && view !== 'images' ? 'bg-[#4f46e5] text-white shadow-md' : 'hover:bg-slate-100'}`}>
-          Bài tập học sinh {(unviewedCount + 2) > 0 && <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] w-4 h-4 flex items-center justify-center rounded-full border border-white">{unviewedCount + 2}</span>}
+          Bài tập học sinh {(() => { const sectionsWithUnviewed = homeworkList.filter(hw => { const hwViewed = viewedStudentIdsByHW[hw.id] ?? [4]; const hwApiViewed = viewedApiIdsByHW[hw.id] ?? []; return students.filter(s => !hwViewed.includes(s.stt)).length + apiSubmissions.filter(sub => !hwApiViewed.includes(sub.id)).length > 0; }).length; return sectionsWithUnviewed > 0 ? <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] w-4 h-4 flex items-center justify-center rounded-full border border-white">{sectionsWithUnviewed}</span> : null; })()}
         </span>
         <span onClick={() => { setActiveMainTab('progress'); setReportView('select'); setProcessView('select'); setView('list'); }} className={`px-4 py-1.5 rounded-full cursor-pointer transition-all ${activeMainTab === 'progress' && view !== 'images' ? 'bg-[#4f46e5] text-white shadow-md' : 'hover:bg-slate-100'}`}>
           Báo cáo tiến bộ
@@ -180,7 +180,7 @@ export default function TeacherHomeworkTable({ userName }: { userName: string })
           <div className="bg-white rounded-2xl border shadow-sm p-8 text-center animate-in fade-in duration-500">
             <button onClick={() => { if (activeMainTab === 'progress') { setReportView('detail'); setView('list'); } else { setView('detail'); } }} className="mb-4 text-sm text-blue-600 font-medium hover:underline flex items-center">← Quay lại</button>
             <h2 className="text-[14px] font-bold text-slate-800 mb-8 pb-4 border-b text-left">{activeHW?.fullTitle} - <span className="text-blue-700">{selectedStudent?.name}</span></h2>
-            <div className="grid grid-cols-3 gap-8">{[0, 1, 2].map((i) => (<div key={i} className="w-full aspect-3/4 border shadow-md bg-white overflow-hidden"><img src={selectedStudent?.images[i] || ""} className="w-full h-full object-cover" /></div>))}</div>
+            <div className={`grid gap-8 ${(selectedStudent?.images?.length ?? 0) <= 2 ? 'grid-cols-2' : (selectedStudent?.images?.length ?? 0) === 3 ? 'grid-cols-3' : 'grid-cols-4'}`}>{(selectedStudent?.images ?? []).map((img: string, i: number) => (<a key={i} href={img} target="_blank" rel="noopener noreferrer" className="w-full aspect-3/4 border shadow-md bg-white overflow-hidden block cursor-zoom-in hover:ring-2 hover:ring-blue-400 transition-all"><img src={img} className="w-full h-full object-cover" /></a>))}</div>
             <p className="mt-8 text-sm text-slate-400 italic font-medium">* Những câu sai AI sẽ gạch chân đỏ để GV dễ dàng theo dõi</p>
           </div>
         ) : activeMainTab === 'modules' ? (
@@ -339,9 +339,7 @@ export default function TeacherHomeworkTable({ userName }: { userName: string })
                         <div className="bg-slate-50 rounded-lg p-3"><span className="text-slate-500">Thời gian:</span> <span className="font-medium">{new Date(selectedSubmission.graded_at).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}</span></div>
                       </div>
                       {(selectedSubmission.detailed_feedback || selectedSubmission.feedback) && <div className="mb-4"><h4 className="text-sm font-bold text-slate-700 mb-2">Nhận xét từ Cô Hana:</h4><p className="text-sm text-slate-600 bg-blue-50 rounded-lg p-3 leading-relaxed whitespace-pre-line">{selectedSubmission.detailed_feedback || selectedSubmission.feedback}</p></div>}
-                      {(selectedSubmission.details?.strengths || []).length > 0 && <div className="mb-4"><h4 className="text-sm font-bold text-green-700 mb-2">Điểm mạnh:</h4><ul className="text-sm text-slate-600 space-y-1">{selectedSubmission.details.strengths.map((s: string, i: number) => <li key={i} className="bg-green-50 rounded-lg px-3 py-2">✓ {s}</li>)}</ul></div>}
-                      {(selectedSubmission.details?.improvements || []).length > 0 && <div className="mb-4"><h4 className="text-sm font-bold text-orange-600 mb-2">Cần cải thiện:</h4><ul className="text-sm text-slate-600 space-y-1">{selectedSubmission.details.improvements.map((s: string, i: number) => <li key={i} className="bg-orange-50 rounded-lg px-3 py-2">→ {s}</li>)}</ul></div>}
-                      {selectedSubmission.attachment_paths && selectedSubmission.attachment_paths.length > 0 && <div><h4 className="text-sm font-bold text-slate-700 mb-2">Ảnh bài tập đã nộp:</h4><div className="grid grid-cols-3 gap-4">{selectedSubmission.attachment_paths.map((p: string, i: number) => <div key={i} className="w-full aspect-3/4 border shadow-md bg-white overflow-hidden"><img src={`${API_BASE}/uploads/${p}`} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).src = '/BaiTapHS1_Demo.jpg'; }} /></div>)}</div></div>}
+                      {selectedSubmission.attachment_paths && selectedSubmission.attachment_paths.length > 0 && <div><h4 className="text-sm font-bold text-slate-700 mb-2">Ảnh bài tập đã nộp:</h4><div className="grid grid-cols-3 gap-4">{selectedSubmission.attachment_paths.map((p: string, i: number) => <a key={i} href={`${API_BASE}/uploads/${p}`} target="_blank" rel="noopener noreferrer" className="w-full aspect-3/4 border shadow-md bg-white overflow-hidden block cursor-zoom-in hover:ring-2 hover:ring-blue-400 transition-all"><img src={`${API_BASE}/uploads/${p}`} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).src = '/BaiTapHS1_Demo.jpg'; }} /></a>)}</div></div>}
                     </div>
                   </div>
                 )}
@@ -358,9 +356,14 @@ export default function TeacherHomeworkTable({ userName }: { userName: string })
                         <div className="bg-slate-50 rounded-lg p-3"><span className="text-slate-500">Thời gian:</span> <span className="font-medium">{selectedStaticStudent.subTime}</span></div>
                       </div>
                       <div className="mb-4"><h4 className="text-sm font-bold text-slate-700 mb-2">Nhận xét:</h4><p className="text-sm text-slate-600 bg-blue-50 rounded-lg p-3 leading-relaxed">{selectedStaticStudent.comment}</p></div>
-                      {selectedStaticStudent.strengths.length > 0 && <div className="mb-4"><h4 className="text-sm font-bold text-green-700 mb-2">Điểm mạnh:</h4><ul className="text-sm text-slate-600 space-y-1">{selectedStaticStudent.strengths.map((s: string, i: number) => <li key={i} className="bg-green-50 rounded-lg px-3 py-2">✓ {s}</li>)}</ul></div>}
-                      {selectedStaticStudent.improvements.length > 0 && <div className="mb-4"><h4 className="text-sm font-bold text-orange-600 mb-2">Cần cải thiện:</h4><ul className="text-sm text-slate-600 space-y-1">{selectedStaticStudent.improvements.map((s: string, i: number) => <li key={i} className="bg-orange-50 rounded-lg px-3 py-2">→ {s}</li>)}</ul></div>}
-                      <div><h4 className="text-sm font-bold text-slate-700 mb-2">Ảnh bài tập đã nộp:</h4><div className="grid grid-cols-3 gap-4">{selectedStaticStudent.images.map((img: string, i: number) => <div key={i} className="w-full aspect-3/4 border shadow-md bg-white overflow-hidden"><img src={img} className="w-full h-full object-cover" /></div>)}</div></div>
+                      <div>
+                        <h4 className="text-sm font-bold text-slate-700 mb-2">Ảnh bài tập đã nộp:</h4>
+                        <div className={`grid gap-4 ${selectedStaticStudent.images.length <= 2 ? 'grid-cols-2' : selectedStaticStudent.images.length === 3 ? 'grid-cols-3' : 'grid-cols-4'}`}>
+                          {selectedStaticStudent.images.map((img: string, i: number) => <a key={i} href={img} target="_blank" rel="noopener noreferrer" className="w-full aspect-3/4 border shadow-md bg-white overflow-hidden block cursor-zoom-in hover:ring-2 hover:ring-blue-400 transition-all">
+                            <img src={img} className="w-full h-full object-cover" />
+                          </a>)}
+                        </div>
+                      </div>
                     </div>
                   </div>
                 )}

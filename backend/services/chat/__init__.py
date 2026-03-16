@@ -2,10 +2,11 @@
 Chat service for bidirectional AI conversations.
 
 Provides:
-- ChatService: Main orchestrator — Zalo (/ask, parent-facing) and
-  Google Chat (@mention, student-facing)
+- ChatService: Main orchestrator — Zalo (/dailysum, parent-facing) and
+  Google Chat (@mention commands + demo trigger phrases, student-facing)
 - MessageDebouncer: Per-user message debouncing to batch rapid messages
-- GoogleChatListener: Pub/Sub consumer + Chat API replier
+- GoogleChatListener: Pub/Sub consumer + Chat API replier (with
+  hardcoded demo phrase support)
 """
 
 from .chat_service import (
