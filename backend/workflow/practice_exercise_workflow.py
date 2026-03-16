@@ -5,7 +5,6 @@ Handles student requests for personalized practice exercises based on weak point
 
 from typing import List, Dict, Optional, Any
 from datetime import datetime
-from uuid import UUID
 
 from agents.teaching_assistant.agent import TeachingAssistantAgent
 from agents.grading.agent import GradingAgent, GradingCriteria

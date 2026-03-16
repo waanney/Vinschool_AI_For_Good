@@ -28,7 +28,6 @@ from .base import BaseNotifier
 from .models import (
     Notification,
     NotificationResult,
-    NotificationType,
     NotificationChannel,
 )
 
@@ -166,7 +165,7 @@ class GoogleChatNotifier(BaseNotifier):
             )
 
         try:
-            body = self._create_daily_summary_message(notification)
+            body = self._create_message(notification)
 
             url = f"https://chat.googleapis.com/v1/{space}/messages"
 
@@ -231,7 +230,7 @@ class GoogleChatNotifier(BaseNotifier):
 
         try:
             # Choose message format based on notification type
-            message = self._create_daily_summary_message(notification)
+            message = self._create_message(notification)
 
             async with httpx.AsyncClient() as client:
                 response = await client.post(
@@ -288,9 +287,9 @@ class GoogleChatNotifier(BaseNotifier):
             return notification.teacher.google_chat_webhook
         return self.default_webhook_url
 
-    def _create_daily_summary_message(self, notification: Notification) -> dict:
+    def _create_message(self, notification: Notification) -> dict:
         """
-        Create a plain text message for daily summary (student/parent facing).
+        Create a plain text message payload for Google Chat.
 
         The notification.message already contains the full AI-generated text.
         """

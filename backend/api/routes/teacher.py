@@ -15,7 +15,6 @@ from fastapi import APIRouter, UploadFile, File, Form, HTTPException
 from pydantic import BaseModel
 import aiofiles
 from pathlib import Path
-import shutil
 
 from domain.models.document import Document, DocumentType
 from workflow.daily_content_workflow import DailyContentWorkflow

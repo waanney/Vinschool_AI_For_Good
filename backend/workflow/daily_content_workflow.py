@@ -73,7 +73,7 @@ class DailyContentWorkflow:
                 use_ocr=False,
             )
             
-            results["processing_result"] = processing_result.dict()
+            results["processing_result"] = processing_result.model_dump()
             
             if not processing_result.success:
                 results["errors"].append(f"Processing failed: {processing_result.error}")

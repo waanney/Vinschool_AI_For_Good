@@ -20,7 +20,6 @@ import asyncio
 import re
 from datetime import datetime
 from typing import Optional
-from urllib.parse import urlparse
 
 from config.settings import get_settings
 from utils.logger import logger
@@ -37,7 +36,6 @@ from .models import (
     NotificationType,
     EscalationContext,
     LowGradeContext,
-    SubmissionGradedContext,
     StudentInfo,
     TeacherInfo,
     ParentInfo,
@@ -54,6 +52,7 @@ class NotificationService:
     - create_daily_summary_for_students() -> Google Chat (bot posts in shared space)
     - create_daily_summary_for_parents()  -> Zalo to parent group
     """
+
 
     _instance: Optional["NotificationService"] = None
 
@@ -345,47 +344,6 @@ class NotificationService:
             parent=parent,
             title=f"Daily Summary - {date}",
             message=content,
-        )
-
-    def create_submission_graded_notification(
-        self,
-        teacher: TeacherInfo,
-        student: StudentInfo,
-        submission_id: str,
-        assignment_title: str,
-        subject: str,
-        score: float,
-        max_score: float = 10.0,
-        feedback: Optional[str] = None,
-        attachment_count: int = 0,
-        channel: NotificationChannel = NotificationChannel.EMAIL,
-    ) -> Notification:
-        """
-        Create a submission-graded notification for teacher.
-
-        Sent when a student submits homework via /grade in Google Chat
-        and it has been automatically graded.
-        """
-        return Notification(
-            notification_type=NotificationType.SUBMISSION_GRADED,
-            channel=channel,
-            teacher=teacher,
-            student=student,
-            title=f"Submission Graded: {student.name} - {assignment_title}",
-            message=(
-                f"Student {student.name} submitted {assignment_title} "
-                f"and received {score:.1f}/{max_score:.1f}."
-            ),
-            submission_graded_context=SubmissionGradedContext(
-                submission_id=submission_id,
-                student_name=student.name,
-                assignment_title=assignment_title,
-                subject=subject,
-                score=score,
-                max_score=max_score,
-                feedback=feedback,
-                attachment_count=attachment_count,
-            ),
         )
 
 
