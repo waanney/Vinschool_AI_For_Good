@@ -4,7 +4,6 @@ Supports PPTX, DOCX, PDF, and images (with OCR).
 """
 
 from pathlib import Path
-from typing import Optional
 import tempfile
 
 from pptx import Presentation
