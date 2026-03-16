@@ -26,7 +26,7 @@ export default function Sidebar() {
 
   return (
     <aside className="w-20 h-screen bg-white border-r flex flex-col items-center py-4 space-y-6 shadow-sm">
-      <Link href="/teacher/home" className="w-18 h-18 -full mb-2 relative overflow-hidden">
+      <Link href="/teacher/home" className="w-18 h-18 rounded-full mb-2 relative overflow-hidden">
         <Image
           src="/logoVinschool.png"
           alt="Vinschool Logo"
