@@ -289,7 +289,7 @@ DETAILED_FEEDBACK:
             if 'TOTAL_SCORE' in sections:
                 try:
                     total_score = float(sections['TOTAL_SCORE'].split()[0])
-                except:
+                except Exception:
                     pass
 
             # Fallback: scan entire response for TOTAL_SCORE pattern
@@ -301,7 +301,7 @@ DETAILED_FEEDBACK:
                 if score_match:
                     try:
                         total_score = float(score_match.group(1))
-                    except:
+                    except Exception:
                         pass
 
             # Parse criterion scores
@@ -314,7 +314,7 @@ DETAILED_FEEDBACK:
                         try:
                             score = float(parts[1].split('/')[0].strip())
                             criteria_scores[name] = score
-                        except:
+                        except Exception:
                             pass
 
             # Extract feedback (concise) and detailed feedback (full paragraph)

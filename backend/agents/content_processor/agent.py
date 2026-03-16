@@ -146,7 +146,7 @@ Focus on educational value and clarity."""
 2. A list of 5-10 key topics/keywords in Vietnamese
 
 Content:
-{text[:3000]}  # Limit to first 3000 chars
+{text[:3000]}
 
 Format your response as:
 SUMMARY:
@@ -156,7 +156,7 @@ KEYWORDS:
 [keyword1, keyword2, ...]"""
             
             result = await self._agent.run(prompt)
-            response_text = result.data
+            response_text = result.output
             
             # Parse response
             summary = ""
