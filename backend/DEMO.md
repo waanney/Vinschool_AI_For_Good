@@ -157,7 +157,7 @@ cd frontend
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) to see the Teacher Dashboard. When the demo `/grade`
+Open [http://localhost:3000/teacher/dashboard](http://localhost:3000/teacher/dashboard) to see the Teacher Dashboard. When the demo `/grade`
 trigger fires (with images), the graded submission will appear in the homework
 table within 5 seconds (polling interval).
 
@@ -174,7 +174,7 @@ cd backend && python -m scripts.run_zalo_server
 cd frontend && npm run dev
 ```
 
-Open [http://localhost:3000/zalo-desktop](http://localhost:3000/zalo-desktop) and type `/dailysum`.
+Open [http://localhost:3000/zalo/desktop](http://localhost:3000/zalo/desktop) and type `/dailysum`.
 
 ## Other Slash Commands
 

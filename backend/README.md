@@ -145,7 +145,7 @@ Multi-agent AI system for educational support built with PydanticAI, Milvus, and
    ```bash
    DEFAULT_PROVIDER=google
    GEMINI_API_KEY=your-gemini-api-key
-   DEFAULT_LLM_MODEL=gemini-1.5-pro
+   DEFAULT_LLM_MODEL=gemini-2.5-pro
    ```
 
    **Option 3: Anthropic**
@@ -241,41 +241,44 @@ curl -X POST "http://localhost:8000/api/student/homework/submit" \
 ```text
 backend/
 ├── agents/                  # PydanticAI agents
-│   ├── base/                # Base agent classes
-│   ├── teaching_assistant/  # Q&A, summarization, exercises
-│   ├── content_processor/   # Document processing
-│   └── grading/             # Homework grading
+│   ├── base/                       # Base agent classes
+│   ├── teaching_assistant/         # Q&A, summarization, exercises
+│   ├── content_processor/          # Document processing
+│   └── grading/                    # Homework grading
 ├── api/                     # FastAPI application
-│   ├── main.py              # App initialization
-│   └── routes/              # API endpoints
+│   ├── main.py                     # App initialization
+│   └── routes/                     # API endpoints
 ├── config/                  # Configuration management
 ├── database/                # Database clients
-│   ├── milvus_client.py     # Milvus vector DB
-│   ├── postgres_client.py   # PostgreSQL
-│   └── repositories/        # Data access layer
-│       ├── document_repository.py   # Document storage
-│       └── grading_repository.py    # Grading results → Milvus
+│   ├── milvus_client.py            # Milvus vector DB
+│   ├── postgres_client.py          # PostgreSQL
+│   └── repositories/               # Data access layer
+│       ├── daily_lesson_repository.py     # Daily lesson storage
+│       ├── document_repository.py         # Document storage
+│       ├── grading_repository.py          # Grading results → Milvus
+│       └── student_profile_repository.py  # Student profile storage
 ├── domain/                  # Domain models (DDD)
-│   ├── models/              # Entities
-│   └── repositories/        # Repository interfaces
+│   ├── models/                     # Entities
+│   └── repositories/               # Repository interfaces
 ├── services/                # Business services
-│   ├── chat/                # Interactive AI chat (Cô Hana)
-│   │   ├── chat_service.py          # Channel-aware LLM orchestrator
-│   │   ├── debouncer.py             # Per-user message debouncing
-│   │   ├── google_chat_listener.py  # Pub/Sub consumer + Chat API replier
-│   │   └── submission_store.py      # In-memory store for /grade submissions
-│   ├── scheduler.py         # 6pm daily summary scheduler + /dailysum trigger
-│   └── notification/        # Notification service
-│       ├── models.py                # Notification data models
-│       ├── base.py                  # BaseNotifier interface
-│       ├── email_notifier.py        # SMTP email (escalation + low grade)
-│       ├── google_chat_notifier.py  # Google Chat (daily summary only)
-│       ├── zalo_notifier.py         # Zalo clone UI (in-memory store → REST polling)
-│       └── notification_service.py  # Main orchestrator + factory methods
+│   ├── chat/                       # Interactive AI chat (Cô Hana)
+│   │   ├── chat_service.py                # Channel-aware LLM orchestrator
+│   │   ├── debouncer.py                   # Per-user message debouncing
+│   │   ├── google_chat_listener.py        # Pub/Sub consumer + Chat API replier
+│   │   └── submission_store.py            # In-memory store for /grade submissions
+│   ├── scheduler.py                # 6pm daily summary scheduler + /dailysum trigger
+│   └── notification/               # Notification service
+│       ├── models.py                      # Notification data models
+│       ├── base.py                        # BaseNotifier interface
+│       ├── email_notifier.py              # SMTP email (escalation + low grade)
+│       ├── google_chat_notifier.py        # Google Chat (daily summary only)
+│       ├── zalo_notifier.py               # Zalo clone UI (in-memory store → REST polling)
+│       └── notification_service.py        # Main orchestrator + factory methods
 ├── utils/                   # Utilities
-│   ├── embeddings.py        # Embedding generation
-│   ├── document_parser.py   # Document parsing
-│   └── logger.py            # Logging setup
+│   ├── embeddings.py               # Embedding generation
+│   ├── document_parser.py          # Document parsing
+│   ├── gemini_vision.py            # Gemini 2.5 Pro image/OCR parsing
+│   └── logger.py                   # Logging setup
 ├── workflow/                # Workflow orchestration
 │   ├── daily_content_workflow.py
 │   ├── homework_grading_workflow.py
@@ -323,8 +326,8 @@ GRADING_LLM_MODEL=gpt-4-turbo-preview
 ```bash
 DEFAULT_PROVIDER=google
 GEMINI_API_KEY=your-gemini-key
-DEFAULT_LLM_MODEL=gemini-1.5-pro
-GRADING_LLM_MODEL=gemini-1.5-pro
+DEFAULT_LLM_MODEL=gemini-2.5-pro
+GRADING_LLM_MODEL=gemini-2.5-pro
 ```
 
 #### Anthropic (Claude)
@@ -399,15 +402,14 @@ Each notification type targets specific channels — there is no chat or reply.
 
 #### Email (SMTP) Setup
 
-1. Step 1: Get Gmail App Password**
-
+1. **Step 1: Get Gmail App Password**
    1. Go to [myaccount.google.com](https://myaccount.google.com)
    2. Navigate to **Security & sign-in** → **2-Step Verification** → Turn on 2-Step Verification
    3. Go to [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords)
    4. Type name in **App name**: Vinschool AI (your choice)
    5. Click **Create** and copy the 16-character password (`abcd efgh ijkl mnop`)
 
-2. Step 2: Configure `.env`**
+2. **Step 2: Configure `.env`**
 
 ```bash
 ENABLE_EMAIL_NOTIFICATIONS=true
@@ -475,12 +477,13 @@ The Zalo channel stores plain-text messages in-memory; the frontend polls `GET /
 
 **Zalo API endpoints:**
 
-| Method   | Endpoint              | Description                                     |
-| -------- | --------------------- | ----------------------------------------------- |
-| `GET`    | `/api/zalo/messages`  | List all stored messages                        |
-| `POST`   | `/api/zalo/send-demo` | Send the hardcoded daily summary to the Zalo UI |
-| `POST`   | `/api/zalo/chat`      | `/dailysum` — hardcoded demo summary            |
-| `DELETE` | `/api/zalo/messages`  | Clear all messages                              |
+| Method   | Endpoint                       | Description                                     |
+| -------- | ------------------------------ | ----------------------------------------------- |
+| `GET`    | `/api/zalo/messages`           | List all stored messages                        |
+| `POST`   | `/api/zalo/send-demo`          | Send the hardcoded daily summary to the Zalo UI |
+| `POST`   | `/api/zalo/chat`               | `/dailysum` — hardcoded demo summary            |
+| `DELETE` | `/api/zalo/messages`           | Clear all messages                              |
+| `POST`   | `/api/zalo/send-daily-summary` | Send AI-generated daily summary to Zalo UI      |
 
 **Submission API endpoints** (populated by Google Chat `/grade` command):
 
