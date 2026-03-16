@@ -57,7 +57,6 @@ class HomeworkGradingWorkflow:
             assignment: Assignment entity
             rubric: Grading rubric
             submission_file_path: Path to submission file (for images)
-            notify_student: Whether to notify student
             notify_teacher: Whether to notify teacher
 
         Returns:
@@ -150,7 +149,7 @@ class HomeworkGradingWorkflow:
             result = await self.grade_homework(
                 assignment=assignment,
                 rubric=rubric,
-                notify_student=False,  # Batch notification later
+                notify_teacher=False,  # Batch notification later
             )
             results.append(result)
 
