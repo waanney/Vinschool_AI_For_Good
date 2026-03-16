@@ -136,8 +136,9 @@ async def trigger_daily_summary_demo(
             )
 
             svc = NotificationService()
-            result = await svc.send_notification(notification)
-            if result.success:
+            results = await svc.send(notification)
+            result = results[0] if results else None
+            if result and result.success:
                 logger.info("[SCHEDULER] Daily summary sent to Google Chat")
             else:
                 logger.warning(

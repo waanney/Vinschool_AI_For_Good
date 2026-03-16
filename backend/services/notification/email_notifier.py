@@ -218,9 +218,9 @@ class EmailNotifier(BaseNotifier):
         chat_link_html = ""
         if ctx.google_chat_link:
             chat_link_html = f"""
-            <div class="info-box">
-                <p><span class="label">Respond directly in Google Chat:</span></p>
-                <a href="{ctx.google_chat_link}" class="button">Open Google Chat</a>
+            <div style="background-color: #1565C0; padding: 15px 20px; margin: 15px 0; border-radius: 6px;">
+                <p style="color: white; font-weight: bold; margin: 0 0 10px 0;">Respond directly in Google Chat:</p>
+                <a href="{ctx.google_chat_link}" style="display: inline-block; padding: 10px 20px; background-color: white; color: #1565C0; text-decoration: none; border-radius: 4px; font-weight: bold;">Open Google Chat</a>
             </div>
             """
 
