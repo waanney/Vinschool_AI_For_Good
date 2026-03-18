@@ -180,10 +180,10 @@ Open [http://localhost:3000/zalo/desktop](http://localhost:3000/zalo/desktop) an
 
 These commands are also available (not demo trigger phrases):
 
-| Command           | Description                                  |
-| ----------------- | -------------------------------------------- |
-| `/ask <question>` | AI Q&A (Cô Hana answers from lesson data)    |
-| `/grade` + images | AI grading (Gemini vision)                   |
-| `/hw [môn]`       | AI homework suggestions (personalised)       |
-| `/dailysum`       | Hardcoded daily summary (real sent at 18:00) |
-| `/help`           | List available commands                      |
+| Command           | Description                                               |
+| ----------------- | --------------------------------------------------------- |
+| `/ask <question>` | AI Q&A (Cô Hana answers from lesson data)                 |
+| `/grade` + images | AI grading (Gemini vision)                                |
+| `/hw [môn]`       | AI homework suggestions (personalised)                    |
+| `/dailysum`       | Hardcoded daily summary (real sent at 18:00 Vietnam time) |
+| `/help`           | List available commands                                   |

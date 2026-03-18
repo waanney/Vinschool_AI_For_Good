@@ -12,7 +12,7 @@ four slash commands embedded in the message text:
 - ``/hw [môn]``       — Suggest supplementary homework based on the student's
                         Milvus profile (strengths/weaknesses) and recent grades
 - ``/dailysum``       — Hardcoded daily lesson summary (real summary sent
-                        at 18:00 by scheduler)
+                        at 18:00 Vietnam time by scheduler)
 - ``/help``           — List available commands
 
 In addition, the bot supports **demo trigger phrases** — Vietnamese
@@ -337,9 +337,10 @@ class GoogleChatListener:
     async def _handle_dailysum(self, event: dict) -> None:
         """Handle the /dailysum command: return the hardcoded daily summary.
 
-        The real AI-generated summary is sent automatically at 18:00 by
-        the scheduler. /dailysum just returns the static demo content
-        so the demo always works without calling the LLM.
+        The real AI-generated summary is sent automatically at 18:00
+        Vietnam time (Asia/Ho_Chi_Minh) by the scheduler. /dailysum
+        just returns the static demo content so the demo always works
+        without calling the LLM.
         """
         from services.scheduler import DEMO_LESSON_CONTENT
 
@@ -552,7 +553,7 @@ class GoogleChatListener:
         - /ask <question>  — AI Q&A (debounced, student persona)
         - /grade           — Grade submitted homework images
         - /hw [môn]        — Suggest supplementary homework
-        - /dailysum        — Hardcoded lesson summary (real one sent at 18:00)
+        - /dailysum        — Hardcoded lesson summary (real one sent at 18:00 Vietnam time)
 
         Demo trigger phrases (hardcoded, no AI cost):
         - "Cô ơi ngày mai có..."     → /ask demo (no escalation)
