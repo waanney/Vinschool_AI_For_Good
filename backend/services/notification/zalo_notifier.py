@@ -17,6 +17,7 @@ Used for: Daily summaries sent to parents via Zalo.
 
 from datetime import datetime
 from typing import Optional
+from zoneinfo import ZoneInfo
 
 from utils.logger import logger
 
@@ -48,11 +49,9 @@ class ZaloNotifier(BaseNotifier):
 
     def __init__(
         self,
-        oa_access_token: Optional[str] = None,
-        enabled: bool = False,
+        enabled: bool = True,
     ):
         super().__init__(enabled=enabled)
-        self.oa_access_token = oa_access_token
 
     @property
     def channel_name(self) -> str:
@@ -105,7 +104,7 @@ class ZaloNotifier(BaseNotifier):
         The frontend renders this as a Zalo chat bubble showing the
         full AI-generated message text.
         """
-        now = datetime.now()
+        now = datetime.now(ZoneInfo("Asia/Ho_Chi_Minh"))
 
         return {
             "id": notification.notification_id,

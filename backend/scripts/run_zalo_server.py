@@ -18,6 +18,7 @@ import uuid
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from typing import Optional
 
 import uvicorn
@@ -87,7 +88,7 @@ async def _handle_chat(sender: str, text: str) -> ChatResponse:
     Kept here as a thin wrapper so the standalone script doesn't depend
     on the full api/ package (which needs PostgreSQL/Milvus init).
     """
-    now = datetime.now().strftime("%H:%M")
+    now = datetime.now(ZoneInfo("Asia/Ho_Chi_Minh")).strftime("%H:%M")
     text = text.strip()
     sender = sender.strip()
 
@@ -145,7 +146,7 @@ async def send_demo(request: DemoSendRequest = DemoSendRequest()):
             parent_id="parent-demo",
             name=f"Phụ huynh {request.student_name}",
         ),
-        title=f"Daily Summary - {request.date or datetime.now().strftime('%d/%m/%Y')}",
+        title=f"Daily Summary - {request.date or datetime.now(ZoneInfo('Asia/Ho_Chi_Minh')).strftime('%d/%m/%Y')}",
         message=request.message or DEMO_PLAIN_TEXT,
     )
 
