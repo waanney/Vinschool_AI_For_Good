@@ -2,9 +2,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import "@/app/globals.css";
 
-// Backend API base URL
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
-
 interface BackendMessage {
     id: string;
     sender: string;
@@ -84,7 +81,7 @@ export const ZaloMobileChat: React.FC = () => {
     /** Fetch messages from backend and sync (add new + remove deleted) */
     const fetchMessages = useCallback(async () => {
         try {
-            const res = await fetch(`${API_BASE}/api/zalo/messages`);
+            const res = await fetch(`/api/zalo/messages`);
             if (!res.ok) return;
             const data = await res.json();
             const backendMessages = data.messages as BackendMessage[];
@@ -177,7 +174,7 @@ export const ZaloMobileChat: React.FC = () => {
             fetchedIds.current.add(tempId);
 
             try {
-                const res = await fetch(`${API_BASE}/api/zalo/chat`, {
+                const res = await fetch(`/api/zalo/chat`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ sender: "Phụ huynh Alex", text }),

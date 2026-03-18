@@ -3,8 +3,6 @@
 import { useState, useRef } from 'react';
 import { PlusCircle, Check, Loader2 } from 'lucide-react';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
-
 interface ParsedLesson {
   subject: string;
   title: string;
@@ -57,7 +55,7 @@ export default function TeacherUploadFlow() {
         formData.append('date', newHW.deadline || new Date().toISOString().slice(0, 10));
         formData.append('subject', '');
 
-        const res = await fetch(`${API_BASE}/api/teacher/daily-lesson/parse-image`, {
+        const res = await fetch(`/api/teacher/daily-lesson/parse-image`, {
           method: 'POST',
           body: formData,
         });
