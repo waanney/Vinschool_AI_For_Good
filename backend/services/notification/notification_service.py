@@ -88,8 +88,7 @@ class NotificationService:
         )
 
         self._zalo_notifier = ZaloNotifier(
-            oa_access_token=settings.ZALO_OA_ACCESS_TOKEN,
-            enabled=settings.ENABLE_ZALO_NOTIFICATIONS,
+            enabled=True,
         )
 
         self._notifiers: dict[NotificationChannel, BaseNotifier] = {
