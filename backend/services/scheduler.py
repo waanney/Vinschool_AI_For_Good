@@ -2,8 +2,8 @@
 Daily summary scheduler.
 
 Fires automatically at DAILY_SUMMARY_HOUR:DAILY_SUMMARY_MINUTE (default 18:00)
-to send the AI-generated daily lesson summary to both Google Chat (students)
-and Zalo clone UI (parents).
+in **Vietnam time** (Asia/Ho_Chi_Minh, UTC+7) to send the AI-generated daily
+lesson summary to both Google Chat (students) and Zalo clone UI (parents).
 
 Also exposes shared demo lesson content constants:
 
@@ -19,9 +19,13 @@ responses without calling the LLM.
 import asyncio
 from datetime import datetime, timedelta
 from typing import Optional
+from zoneinfo import ZoneInfo
 
 from config import settings
 from utils.logger import logger
+
+# Vietnam timezone — all scheduled times use this regardless of server locale
+VN_TZ = ZoneInfo("Asia/Ho_Chi_Minh")
 
 # ===== Demo lesson content =====
 
@@ -102,20 +106,24 @@ async def trigger_daily_summary_demo(
     """
     Send the demo daily summary to the requested channels.
 
+    Each channel receives the appropriate audience-specific content:
+    - Google Chat → ``DEMO_LESSON_CONTENT_STUDENTS`` (student-facing)
+    - Zalo        → ``DEMO_LESSON_CONTENT_PARENTS`` (parent-facing)
+
     Args:
-        content:  Plain-text lesson content.  Defaults to DEMO_LESSON_CONTENT.
+        content:  Plain-text lesson content.  Defaults to channel-specific
+                  demo content constants.
         channels: List of channel names to send to, e.g. ``["zalo"]`` or
                   ``["gchat", "zalo"]``.  ``None`` means *all* channels.
     """
-    text = content or DEMO_LESSON_CONTENT
-
     send_gchat = channels is None or "gchat" in channels
     send_zalo = channels is None or "zalo" in channels
 
-    date_str = datetime.now().strftime("%d/%m/%Y")
+    date_str = datetime.now(VN_TZ).strftime("%d/%m/%Y")
 
     # Google Chat — post via webhook / notification service
     if send_gchat:
+        gchat_text = content or DEMO_LESSON_CONTENT_STUDENTS
         try:
             from services.notification import (Notification,
                                                NotificationChannel,
@@ -132,7 +140,7 @@ async def trigger_daily_summary_demo(
                     class_name="4B5",
                 ),
                 title=f"Daily Summary — {date_str}",
-                message=text,
+                message=gchat_text,
             )
 
             svc = NotificationService()
@@ -149,6 +157,7 @@ async def trigger_daily_summary_demo(
 
     # Zalo — post via ZaloNotifier (in-memory store → REST polling)
     if send_zalo:
+        zalo_text = content or DEMO_LESSON_CONTENT_PARENTS
         try:
             from services.notification.models import \
                 Notification as ZNotification
@@ -173,7 +182,7 @@ async def trigger_daily_summary_demo(
                     name="Phụ huynh Alex",
                 ),
                 title=f"Daily Summary — {date_str}",
-                message=text,
+                message=zalo_text,
             )
 
             notifier = ZaloNotifier(enabled=True)
@@ -193,7 +202,8 @@ async def trigger_daily_summary_demo(
 class DailySummaryScheduler:
     """
     Pure-asyncio background loop that fires ``trigger_daily_summary_demo``
-    once per day at the configured hour/minute.
+    once per day at the configured hour/minute in **Vietnam time**
+    (Asia/Ho_Chi_Minh, UTC+7).
     """
 
     def __init__(self, hour: int = 18, minute: int = 0):
@@ -203,8 +213,8 @@ class DailySummaryScheduler:
         self._task: Optional[asyncio.Task] = None
 
     def seconds_until_next_fire(self) -> float:
-        """Return seconds from *now* until the next scheduled fire time."""
-        now = datetime.now()
+        """Return seconds from *now* until the next scheduled fire time (Vietnam TZ)."""
+        now = datetime.now(VN_TZ)
         target = now.replace(
             hour=self._hour, minute=self._minute, second=0, microsecond=0,
         )
@@ -216,7 +226,7 @@ class DailySummaryScheduler:
         """Background loop: sleep until fire time, trigger, repeat."""
         logger.info(
             f"[SCHEDULER] Daily summary scheduled at "
-            f"{self._hour:02d}:{self._minute:02d} every day"
+            f"{self._hour:02d}:{self._minute:02d} Vietnam time (UTC+7) every day"
         )
 
         while self._running:
