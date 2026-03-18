@@ -131,20 +131,16 @@ class Settings(BaseSettings):
     # Chat debounce settings
     CHAT_DEBOUNCE_SECONDS: float = 3.0
 
-    # Zalo settings
-    ZALO_OA_ACCESS_TOKEN: Optional[str] = None
-
     # Notification behavior
     ENABLE_EMAIL_NOTIFICATIONS: bool = False
     ENABLE_GOOGLE_CHAT_NOTIFICATIONS: bool = False
-    ENABLE_ZALO_NOTIFICATIONS: bool = False
     NOTIFICATION_TIMEOUT: int = 30  # seconds
 
     # Low grade alert threshold (score out of max_score)
     LOW_GRADE_THRESHOLD: float = 7.0
 
-    # Daily summary scheduler (24h, local time)
-    DAILY_SUMMARY_HOUR: int = 18  # Fire at this hour
+    # Daily summary scheduler (24-hour clock, Vietnam time — Asia/Ho_Chi_Minh)
+    DAILY_SUMMARY_HOUR: int = 18  # Fire at this hour (Vietnam time)
     DAILY_SUMMARY_MINUTE: int = 0  # Fire at this minute
 
     # Security

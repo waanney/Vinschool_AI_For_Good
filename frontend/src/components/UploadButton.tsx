@@ -4,8 +4,6 @@
 import { useRef, useState } from 'react';
 import { PlusCircle, Loader2 } from 'lucide-react';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
-
 export default function UploadButton() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
@@ -39,7 +37,7 @@ export default function UploadButton() {
         formData.append('date', new Date().toISOString().slice(0, 10));
         formData.append('subject', '');
 
-        const res = await fetch(`${API_BASE}/api/teacher/daily-lesson/parse-image`, {
+        const res = await fetch(`/api/teacher/daily-lesson/parse-image`, {
           method: 'POST',
           body: formData,
         });

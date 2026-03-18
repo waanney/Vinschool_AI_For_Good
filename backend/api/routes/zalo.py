@@ -10,6 +10,7 @@ that handles the ``/dailysum`` command (hardcoded demo summary).
 
 from datetime import datetime
 from typing import Optional
+from zoneinfo import ZoneInfo
 from fastapi import APIRouter
 from pydantic import BaseModel
 
@@ -113,7 +114,7 @@ async def send_demo_notification(request: DemoSendRequest = DemoSendRequest()):
             parent_id="parent-demo",
             name=f"Phụ huynh {request.student_name}",
         ),
-        title=f"Daily Summary - {request.date or datetime.now().strftime('%d/%m/%Y')}",
+        title=f"Daily Summary - {request.date or datetime.now(ZoneInfo('Asia/Ho_Chi_Minh')).strftime('%d/%m/%Y')}",
         message=request.message or DEMO_PLAIN_TEXT,
     )
 
@@ -155,7 +156,7 @@ async def send_daily_summary(request: SendDailySummaryRequest):
             parent_id="parent-001",
             name=f"Phụ huynh {request.student_name}",
         ),
-        title=f"Daily Summary - {datetime.now().strftime('%d/%m/%Y')}",
+        title=f"Daily Summary - {datetime.now(ZoneInfo('Asia/Ho_Chi_Minh')).strftime('%d/%m/%Y')}",
         message=request.content,
     )
 
@@ -215,7 +216,7 @@ async def chat_ask(request: ChatRequest):
     """
     text = request.text.strip()
     sender = request.sender.strip()
-    now = datetime.now().strftime("%H:%M")
+    now = datetime.now(ZoneInfo("Asia/Ho_Chi_Minh")).strftime("%H:%M")
 
     # Store user message in the message store
     import uuid

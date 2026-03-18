@@ -3,8 +3,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import UploadButton from "./UploadButton";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
-
 /** Score color based on thresholds from backend. */
 function scoreColor(score: number, maxScore: number, lowGradeThreshold: number): string {
   if (score < maxScore / 2) return 'text-red-500';
@@ -71,7 +69,7 @@ export default function TeacherHomeworkTable({ userName }: { userName: string })
   // Poll backend for graded submissions every 5 seconds
   const fetchSubmissions = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/teacher/submissions`);
+      const res = await fetch(`/api/teacher/submissions`);
       if (res.ok) {
         const data = await res.json();
         setApiSubmissions(data.submissions || []);
@@ -92,7 +90,7 @@ export default function TeacherHomeworkTable({ userName }: { userName: string })
   const markSubmissionViewed = async (submissionId: string, hwId: string) => {
     setViewedApiIdsByHW(prev => ({ ...prev, [hwId]: [...(prev[hwId] ?? []), submissionId] }));
     try {
-      await fetch(`${API_BASE}/api/teacher/submissions/${submissionId}/view`, {
+      await fetch(`/api/teacher/submissions/${submissionId}/view`, {
         method: "POST",
       });
       fetchSubmissions(); // Refresh after marking
@@ -301,7 +299,7 @@ export default function TeacherHomeworkTable({ userName }: { userName: string })
                           <td className="p-3 border-r italic text-slate-600 leading-relaxed">{sub.feedback || '-'}</td>
                           <td className="p-3 border-r border-slate-100 text-center">{sub.attachment_paths && sub.attachment_paths.length > 0 ? (
                             <div onClick={(e) => { e.stopPropagation(); setSelectedSubmission(sub); }} className="w-8 h-10 mx-auto border border-slate-200 bg-white shadow-sm overflow-hidden cursor-pointer hover:ring-2 hover:ring-blue-400 transition-all">
-                              <img src={`${API_BASE}/uploads/${sub.attachment_paths[0]}`} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).src = '/BaiTapHS1_Demo.jpg'; }} />
+                              <img src={`/uploads/${sub.attachment_paths[0]}`} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).src = '/BaiTapHS1_Demo.jpg'; }} />
                             </div>
                           ) : (
                             <button onClick={(e) => { e.stopPropagation(); setSelectedSubmission(sub); }} className="text-blue-600 underline text-[11px] font-medium hover:text-blue-800">Xem bài</button>
@@ -339,7 +337,7 @@ export default function TeacherHomeworkTable({ userName }: { userName: string })
                         <div className="bg-slate-50 rounded-lg p-3"><span className="text-slate-500">Thời gian:</span> <span className="font-medium">{new Date(selectedSubmission.graded_at).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}</span></div>
                       </div>
                       {(selectedSubmission.detailed_feedback || selectedSubmission.feedback) && <div className="mb-4"><h4 className="text-sm font-bold text-slate-700 mb-2">Nhận xét từ Cô Hana:</h4><p className="text-sm text-slate-600 bg-blue-50 rounded-lg p-3 leading-relaxed whitespace-pre-line">{selectedSubmission.detailed_feedback || selectedSubmission.feedback}</p></div>}
-                      {selectedSubmission.attachment_paths && selectedSubmission.attachment_paths.length > 0 && <div><h4 className="text-sm font-bold text-slate-700 mb-2">Ảnh bài tập đã nộp:</h4><div className="grid grid-cols-3 gap-4">{selectedSubmission.attachment_paths.map((p: string, i: number) => <a key={i} href={`${API_BASE}/uploads/${p}`} target="_blank" rel="noopener noreferrer" className="w-full aspect-3/4 border shadow-md bg-white overflow-hidden block cursor-zoom-in hover:ring-2 hover:ring-blue-400 transition-all"><img src={`${API_BASE}/uploads/${p}`} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).src = '/BaiTapHS1_Demo.jpg'; }} /></a>)}</div></div>}
+                      {selectedSubmission.attachment_paths && selectedSubmission.attachment_paths.length > 0 && <div><h4 className="text-sm font-bold text-slate-700 mb-2">Ảnh bài tập đã nộp:</h4><div className="grid grid-cols-3 gap-4">{selectedSubmission.attachment_paths.map((p: string, i: number) => <a key={i} href={`/uploads/${p}`} target="_blank" rel="noopener noreferrer" className="w-full aspect-3/4 border shadow-md bg-white overflow-hidden block cursor-zoom-in hover:ring-2 hover:ring-blue-400 transition-all"><img src={`/uploads/${p}`} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).src = '/BaiTapHS1_Demo.jpg'; }} /></a>)}</div></div>}
                     </div>
                   </div>
                 )}
