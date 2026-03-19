@@ -14,21 +14,18 @@ export default function SubmissionDetail() {
       name: "Cấn Trần Quang Bách",
       time: "Jan 4, 2026",
       comment: "Quang Bách đã nắm khá chắc kiến thức phần cộng trừ phân số. Tuy nhiên còn một số lỗi nằm ở...",
-      suggested: "Unit 9: Week 22 fractions math practice and answer key"
     },
     {
       stt: 2,
       name: "Phạm Bách Hợp",
       time: "Apr 4, 2026",
       comment: "Bách Hợp đã nắm chắc kiến thức, tuy nhiên cần chú ý phần sắp xếp thứ tự phân số. Bài tập làm đúng 23/25 câu.",
-      suggested: "Unit 9: Week 22 fractions math practice and answer key"
     },
     {
       stt: 3,
       name: "Nguyễn Hải Anh",
       time: "Jan 8, 2026",
       comment: "Hải Anh nắm kiến thức rất chắc. Bài tập làm đúng 100%.",
-      suggested: "Blook"
     }
   ];
 
@@ -73,10 +70,9 @@ export default function SubmissionDetail() {
                 <tr className="text-center">
                   <th className="p-3 border-b border-r w-12">STT</th>
                   <th className="p-3 border-b border-r w-48">Học sinh</th>
-                  <th className="p-3 border-b border-r w-32">Thời gian nộp bài</th>
+                  <th className="p-3 border-b border-r w-36">Thời gian nộp bài</th>
                   <th className="p-3 border-b border-r">Nhận xét</th>
-                  <th className="p-3 border-b border-r w-20">Chi tiết</th>
-                  <th className="p-3 border-b w-64">Bài tập được đề xuất thêm</th>
+                  <th className="p-3 border-b w-24">Chi tiết</th>
                 </tr>
               </thead>
               <tbody>
@@ -92,12 +88,11 @@ export default function SubmissionDetail() {
                       <td className="p-4 font-bold text-slate-700 border-r">{student.name}</td>
                       <td className="p-4 text-center text-slate-500 border-r bg-slate-50/50">{student.time}</td>
                       <td className="p-4 text-slate-600 border-r leading-relaxed">{student.comment}</td>
-                      <td className="p-4 border-r text-center">
+                      <td className="p-4 text-center">
                         <div className="relative w-10 h-12 mx-auto border bg-white shadow-sm">
                            <Image src="/pdf-thumb.png" alt="thumb" fill className="object-cover p-1 opacity-50"/>
                         </div>
                       </td>
-                      <td className="p-4 font-medium text-slate-700">{student.suggested}</td>
                     </tr>
                   );
                 })}

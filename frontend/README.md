@@ -7,7 +7,7 @@ Giao diện người dùng cho hệ thống Vinschool AI For Good, bao gồm cá
 Frontend này được xây dựng bằng **Next.js 16** với App Router, cung cấp 3 giao diện chính:
 
 - **Student Portal** (`/student`) - Giao diện dành cho học sinh
-- **Teacher Portal** (`/teacher`) - Giao diện dành cho giáo viên  
+- **Teacher Portal** (`/teacher`) - Giao diện dành cho giáo viên
 - **Zalo AI Demo** (`/zalo`) - Demo chat AI giữa phụ huynh và giáo viên
 
 ## 🛠️ Tech Stack
@@ -21,7 +21,7 @@ Frontend này được xây dựng bằng **Next.js 16** với App Router, cung 
 
 ## 📁 Cấu Trúc Thư Mục
 
-```
+```txt
 frontend/
 ├── src/
 │   ├── app/
@@ -76,28 +76,31 @@ npm start
 
 ## 🔗 Routes
 
-| Route | Description |
-|-------|-------------|
-| `/student` | Portal học sinh - xem bài tập, nộp bài |
-| `/teacher` | Portal giáo viên - quản lý bài tập, xem báo cáo |
-| `/zalo` | Landing page chọn demo Desktop/Mobile |
-| `/zalo/desktop` | Zalo AI chat - Desktop view |
-| `/zalo/mobile` | Zalo AI chat - Mobile view |
+| Route           | Description                                     |
+| --------------- | ----------------------------------------------- |
+| `/student`      | Portal học sinh - xem bài tập, nộp bài          |
+| `/teacher`      | Portal giáo viên - quản lý bài tập, xem báo cáo |
+| `/zalo`         | Landing page chọn demo Desktop/Mobile           |
+| `/zalo/desktop` | Zalo AI chat - Desktop view                     |
+| `/zalo/mobile`  | Zalo AI chat - Mobile view                      |
 
 ## 🎨 Features
 
 ### Student Portal
+
 - Xem danh sách bài tập
 - Nộp bài tập
 - Xem feedback từ AI
 
-### Teacher Portal  
+### Teacher Portal
+
 - Tạo và quản lý bài tập
 - Upload tài liệu
 - Xem báo cáo tiến độ học sinh
 - Review submissions
 
 ### Zalo AI Demo
+
 - **Desktop View**: Giao diện Zalo desktop với sidebar, chat list, và chat window
 - **Mobile View**: Giao diện Zalo mobile responsive
 - AI tự động phản hồi tin nhắn từ phụ huynh
@@ -110,7 +113,7 @@ npm start
 Sử dụng alias `@/*` để import từ `src/`:
 
 ```typescript
-import { ZaloDesktopChat } from '@/components/ZaloDesktopChat';
+import { ZaloDesktopChat } from "@/components/ZaloDesktopChat";
 ```
 
 ### React Compiler
@@ -119,12 +122,12 @@ React Compiler được bật để optimize performance tự động.
 
 ## 📝 Scripts
 
-| Command | Description |
-|---------|-------------|
-| `npm run dev` | Start development server |
-| `npm run build` | Build production bundle |
-| `npm start` | Start production server |
-| `npm run lint` | Run ESLint |
+| Command         | Description              |
+| --------------- | ------------------------ |
+| `npm run dev`   | Start development server |
+| `npm run build` | Build production bundle  |
+| `npm start`     | Start production server  |
+| `npm run lint`  | Run ESLint               |
 
 ## 🎯 Development Notes
 
@@ -137,12 +140,14 @@ React Compiler được bật để optimize performance tự động.
 ## 🐛 Troubleshooting
 
 ### Port đã được sử dụng
+
 ```bash
 # Change port
 PORT=3001 npm run dev
 ```
 
 ### Type errors sau khi update dependencies
+
 ```bash
 rm -rf .next
 npm install
@@ -151,12 +156,14 @@ npm install
 ## 📦 Dependencies
 
 ### Production
+
 - `next`: ^16.1.6
-- `react`, `react-dom`: ^19.2.3  
+- `react`, `react-dom`: ^19.2.3
 - `lucide-react`: ^0.563.0
 - `postcss`: ^8.5.6
 
 ### Development
+
 - `typescript`: ^5
 - `tailwindcss`: ^4.1.18
 - `@tailwindcss/postcss`: ^4.1.18
@@ -166,6 +173,7 @@ npm install
 ## 🤝 Contributing
 
 Khi thêm features mới:
+
 1. Tạo component trong `/src/components`
 2. Tạo route trong `/src/app`
 3. Follow coding conventions hiện tại

@@ -63,7 +63,6 @@ export default function TeacherHomeworkTable({ userName }: { userName: string })
 
   // --- API SUBMISSIONS (from /grade Google Chat command) ---
   const [apiSubmissions, setApiSubmissions] = useState<Submission[]>([]);
-  const [unviewedCount, setUnviewedCount] = useState(0);
   const [lowGradeThreshold, setLowGradeThreshold] = useState(7.0);
   const [selectedSubmission, setSelectedSubmission] = useState<Submission | null>(null);
   const [selectedStaticStudent, setSelectedStaticStudent] = useState<any>(null);
@@ -75,7 +74,6 @@ export default function TeacherHomeworkTable({ userName }: { userName: string })
       if (res.ok) {
         const data = await res.json();
         setApiSubmissions(data.submissions || []);
-        setUnviewedCount(data.unviewed_count || 0);
         if (data.low_grade_threshold != null) setLowGradeThreshold(data.low_grade_threshold);
       }
     } catch {
@@ -110,10 +108,85 @@ export default function TeacherHomeworkTable({ userName }: { userName: string })
   }, []);
 
   const students = [
-    { stt: 1, name: "Cấn Trần Quang Bách", score: 8.0, maxScore: 10.0, subTimeShort: "Jan 4, 2026", subTime: "15:00:00 4/1/2026", images: ["/BaiTapHA1_Demo.jpg", "/BaiTapHA2_Demo.jpg", "/BaiTapHA3_Demo.jpg"], comment: "Quang Bách đã nắm khá chắc kiến thức phần cộng trừ phân số. Tuy nhiên vẫn còn một số lỗi nằm ở phần cộng trừ và so sánh phân số." },
-    { stt: 2, name: "Trần Minh Khôi", score: 7.2, maxScore: 10.0, subTimeShort: "Jan 8, 2026", subTime: "15:00:00 8/1/2026", images: ["/BaiTapHA1_Demo.jpg", "/BaiTapHA2_Demo.jpg", "/BaiTapHA3_Demo.jpg"], comment: "Minh Khôi cần ôn thêm về phần cộng/trừ phân số cùng mẫu. Bài tập làm đúng 18/25 câu." },
-    { stt: 3, name: "Phạm Bách Hợp", score: 9.2, maxScore: 10.0, subTimeShort: "Jan 8, 2026", subTime: "15:00:00 8/1/2026", images: ["/BaiTapHA1_Demo.jpg", "/BaiTapHA2_Demo.jpg", "/BaiTapHA3_Demo.jpg"], comment: "Bách Hợp đã nắm chắc kiến thức, tuy nhiên cần chú ý phần sắp xếp thứ tự phân số. Bài tập làm đúng 23/25 câu." },
-    { stt: 4, name: "Nguyễn Hải Anh", score: 10.0, maxScore: 10.0, subTimeShort: "Jan 8, 2026", subTime: "15:00:00 8/1/2026", images: ["/BaiTapHA1_Demo.jpg", "/BaiTapHA2_Demo.jpg", "/BaiTapHA3_Demo.jpg"], comment: "Hải Anh nắm kiến thức rất chắc. Bài tập làm đúng 100%." }
+    {
+      stt: 1, name: "Cấn Trần Quang Bách", score: 8.0, maxScore: 10.0, subTimeShort: "Jan 4, 2026", subTime: "15:00:00 4/1/2026",
+      images: ["/BaiTapHA1_Demo.jpg", "/BaiTapHA2_Demo.jpg", "/BaiTapHA3_Demo.jpg"],
+      comment: "Quang Bách đã nắm khá chắc kiến thức phần cộng trừ phân số. Tuy nhiên vẫn còn một số lỗi nằm ở phần cộng trừ và so sánh phân số.",
+      detailedFeedback: `Kết quả chấm bài:
+1. Phần Cộng phân số
+a) 1/3 + 1/3 = 2/3 ✓
+b) 2/5 + 1/5 = 3/5 ✓
+c) 2/8 + 1/4 = 3/8 ❌
+   1/4 = 2/8 → 2/8 + 2/8 = 4/8 = 1/2
+
+2. Phần Trừ phân số
+a) 3/4 - 1/4 = 1/2 ✓
+b) 5/6 - 1/3 = 1/3 ❌
+   1/3 = 2/6 → 5/6 - 2/6 = 3/6 = 1/2
+
+3. So sánh phân số
+a) 2/3 và 3/4 → đúng ✓
+b) 1/2 và 2/5: con trả lời bằng nhau ❌
+   1/2 = 5/10, 2/5 = 4/10 → 1/2 > 2/5
+
+Các phần còn lại con làm rất tốt, đặc biệt là phần toán đố.
+Cô mong con luyện thêm về quy đồng mẫu số để tránh nhầm lẫn nhé!`
+    },
+    {
+      stt: 2, name: "Trần Minh Khôi", score: 7.2, maxScore: 10.0, subTimeShort: "Jan 8, 2026", subTime: "15:00:00 8/1/2026",
+      images: ["/BaiTapHA1_Demo.jpg", "/BaiTapHA2_Demo.jpg"],
+      comment: "Minh Khôi cần ôn thêm về phần cộng/trừ phân số cùng mẫu. Bài tập làm đúng 18/25 câu.",
+      detailedFeedback: `Kết quả chấm bài:
+1. Cộng phân số cùng mẫu
+a) 2/7 + 1/7 = 3/7 ✓
+b) 3/8 + 2/8 = 5/8 ✓
+c) 4/9 + 4/9 = 8/18 ❌ (con nhân cả mẫu)
+   Cùng mẫu thì giữ nguyên mẫu, chỉ cộng tử: 4/9 + 4/9 = 8/9
+
+2. Trừ phân số cùng mẫu
+a) 5/6 - 2/6 = 3/6 = 1/2 ✓
+b) 7/8 - 3/8 = 4/8 ❌ (chưa rút gọn, đúng là 1/2)
+c) 9/10 - 4/10 = 5/10 ❌ (chưa rút gọn, đúng là 1/2)
+
+3. Phần toán đố
+Làm đúng 11/15 câu. Cần đọc kỹ đề bài trước khi tính toán.
+
+Tổng kết: 18/25 câu đúng (7.2/10).
+Con cần chú ý rút gọn phân số sau khi tính và không nhân mẫu khi cộng/trừ phân số cùng mẫu.`
+    },
+    {
+      stt: 3, name: "Phạm Bách Hợp", score: 9.2, maxScore: 10.0, subTimeShort: "Jan 8, 2026", subTime: "15:00:00 8/1/2026",
+      images: ["/BaiTapHA1_Demo.jpg", "/BaiTapHA2_Demo.jpg", "/BaiTapHA3_Demo.jpg", "/BaiTapHA4_Demo.jpg"],
+      comment: "Bách Hợp đã nắm chắc kiến thức, tuy nhiên cần chú ý phần sắp xếp thứ tự phân số. Bài tập làm đúng 23/25 câu.",
+      detailedFeedback: `Kết quả chấm bài:
+1. Cộng/Trừ phân số: 10/10 câu đúng ✓ Xuất sắc!
+
+2. Sắp xếp thứ tự phân số
+a) 1/2, 1/3, 1/4 từ bé đến lớn: con sắp xếp 1/2 < 1/3 < 1/4 ❌
+   Đúng: 1/4 < 1/3 < 1/2
+   (khi tử bằng nhau, mẫu càng lớn thì phân số càng nhỏ)
+b) Câu kế tiếp con cũng sắp xếp theo chiều ngược lại ❌
+
+3. Nhận dạng phân số tương đương và toán đố: đúng toàn bộ ✓
+
+Tổng kết: 23/25 câu đúng (9.2/10).
+Điểm mạnh: cộng trừ phân số rất vững. Cần ghi nhớ: tử bằng nhau → mẫu càng lớn, phân số càng nhỏ.`
+    },
+    {
+      stt: 4, name: "Nguyễn Hải Anh", score: 10.0, maxScore: 10.0, subTimeShort: "Jan 8, 2026", subTime: "15:00:00 8/1/2026",
+      images: ["/BaiTapHA1_Demo.jpg"],
+      comment: "Hải Anh nắm kiến thức rất chắc. Bài tập làm đúng 100%.",
+      detailedFeedback: `Kết quả chấm bài:
+1. Cộng phân số: 8/8 câu đúng ✓
+2. Trừ phân số: 8/8 câu đúng ✓
+3. Sắp xếp thứ tự phân số: 5/5 câu đúng ✓
+4. Toán đố: 4/4 câu đúng ✓
+
+Tổng kết: 25/25 câu đúng (10/10). Xuất sắc!
+
+Hải Anh đã thể hiện sự hiểu biết rất vững về tất cả các dạng bài. Đặc biệt ấn tượng ở phần sắp xếp thứ tự phân số và toán đố — những phần nhiều bạn còn gặp khó khăn.
+Cô rất tự hào về con. Hãy tiếp tục giữ vững phong độ nhé!`
+    }
   ];
 
   const progressAssignments = [
@@ -168,7 +241,16 @@ export default function TeacherHomeworkTable({ userName }: { userName: string })
           Các học phần
         </span>
         <span onClick={() => { setActiveMainTab('homework'); setView('list'); }} className={`px-4 py-1.5 rounded-full cursor-pointer relative transition-all ${activeMainTab === 'homework' && view !== 'images' ? 'bg-[#4f46e5] text-white shadow-md' : 'hover:bg-slate-100'}`}>
-          Bài tập học sinh {(unviewedCount + 2) > 0 && <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] w-4 h-4 flex items-center justify-center rounded-full border border-white">{unviewedCount + 2}</span>}
+          Bài tập học sinh {(() => {
+            const n = homeworkList.filter(item => {
+              const viewedStatic = viewedStudentIdsByHW[item.id] ?? [4];
+              const viewedApi = viewedApiIdsByHW[item.id] ?? [];
+              const hasUnviewedStatic = students.some(s => !viewedStatic.includes(s.stt));
+              const hasUnviewedApi = apiSubmissions.some(sub => !viewedApi.includes(sub.id));
+              return hasUnviewedStatic || hasUnviewedApi;
+            }).length;
+            return n > 0 ? <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] w-4 h-4 flex items-center justify-center rounded-full border border-white">{n}</span> : null;
+          })()}
         </span>
         <span onClick={() => { setActiveMainTab('progress'); setReportView('select'); setProcessView('select'); setView('list'); }} className={`px-4 py-1.5 rounded-full cursor-pointer transition-all ${activeMainTab === 'progress' && view !== 'images' ? 'bg-[#4f46e5] text-white shadow-md' : 'hover:bg-slate-100'}`}>
           Báo cáo tiến bộ
@@ -180,7 +262,7 @@ export default function TeacherHomeworkTable({ userName }: { userName: string })
           <div className="bg-white rounded-2xl border shadow-sm p-8 text-center animate-in fade-in duration-500">
             <button onClick={() => { if (activeMainTab === 'progress') { setReportView('detail'); setView('list'); } else { setView('detail'); } }} className="mb-4 text-sm text-blue-600 font-medium hover:underline flex items-center">← Quay lại</button>
             <h2 className="text-[14px] font-bold text-slate-800 mb-8 pb-4 border-b text-left">{activeHW?.fullTitle} - <span className="text-blue-700">{selectedStudent?.name}</span></h2>
-            <div className="grid grid-cols-3 gap-8">{[0, 1, 2].map((i) => (<div key={i} className="w-full aspect-3/4 border shadow-md bg-white overflow-hidden"><img src={selectedStudent?.images[i] || ""} className="w-full h-full object-cover" /></div>))}</div>
+            <div className="grid grid-cols-3 gap-8">{[0, 1, 2].map((i) => (<a key={i} href={selectedStudent?.images[i] || ""} target="_blank" rel="noopener noreferrer" className="w-full aspect-3/4 border shadow-md bg-white overflow-hidden block cursor-zoom-in"><img src={selectedStudent?.images[i] || ""} alt="" className="w-full h-full object-cover" /></a>))}</div>
             <p className="mt-8 text-sm text-slate-400 italic font-medium">* Những câu sai AI sẽ gạch chân đỏ để GV dễ dàng theo dõi</p>
           </div>
         ) : activeMainTab === 'modules' ? (
@@ -286,10 +368,9 @@ export default function TeacherHomeworkTable({ userName }: { userName: string })
                           <th className="p-3 border-b border-r border-slate-100 w-12">STT</th>
                           <th className="p-3 border-b border-r border-slate-100 w-40">Học sinh</th>
                           <th className="p-3 border-b border-r border-slate-100 w-20">Điểm</th>
-                          <th className="p-3 border-b border-r border-slate-100 w-28">Thời gian nộp bài</th>
+                          <th className="p-3 border-b border-r border-slate-100 w-36">Thời gian nộp bài</th>
                           <th className="p-3 border-b border-r border-slate-100">Nhận xét</th>
-                          <th className="p-3 border-b border-r border-slate-100 w-16 text-center">Chi tiết</th>
-                          <th className="p-3 border-b border-slate-100 w-56">Bài tập được đề xuất thêm</th>
+                          <th className="p-3 border-b border-slate-100 w-24 text-center">Chi tiết</th>
                         </tr>
                       </thead>
                       <tbody>{/* === AI-graded submissions from /grade Google Chat command — hiển thị TRƯỚC === */}{apiSubmissions.map((sub, idx) => (
@@ -298,15 +379,14 @@ export default function TeacherHomeworkTable({ userName }: { userName: string })
                           <td className="p-3 font-bold border-r border-slate-100 text-slate-700">{sub.student_name}</td>
                           <td className={`p-3 text-center border-r border-slate-100 font-bold ${scoreColor(sub.score, sub.max_score, lowGradeThreshold)}`}>{sub.score.toFixed(1)}/{sub.max_score.toFixed(1)}</td>
                           <td className="p-3 text-center border-r border-slate-100 text-slate-500 font-medium">{new Date(sub.graded_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'Asia/Ho_Chi_Minh' })}</td>
-                          <td className="p-3 border-r italic text-slate-600 leading-relaxed">{sub.feedback || '-'}</td>
-                          <td className="p-3 border-r border-slate-100 text-center">{sub.attachment_paths && sub.attachment_paths.length > 0 ? (
+                          <td className="p-3 border-r border-slate-100 italic text-slate-600 leading-relaxed">{sub.feedback || '-'}</td>
+                          <td className="p-3 border-slate-100 text-center">{sub.attachment_paths && sub.attachment_paths.length > 0 ? (
                             <div onClick={(e) => { e.stopPropagation(); setSelectedSubmission(sub); }} className="w-8 h-10 mx-auto border border-slate-200 bg-white shadow-sm overflow-hidden cursor-pointer hover:ring-2 hover:ring-blue-400 transition-all">
                               <img src={`${API_BASE}/uploads/${sub.attachment_paths[0]}`} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).src = '/BaiTapHS1_Demo.jpg'; }} />
                             </div>
                           ) : (
                             <button onClick={(e) => { e.stopPropagation(); setSelectedSubmission(sub); }} className="text-blue-600 underline text-[11px] font-medium hover:text-blue-800">Xem bài</button>
                           )}</td>
-                          <td className="p-3 font-medium text-slate-700">{'-'}</td>
                         </tr>
                       ))}{students.map((s) => (
                         <tr key={s.stt} onClick={() => { const hwIds = viewedStudentIdsByHW[activeHW?.id] ?? [4]; if (!hwIds.includes(s.stt)) setViewedStudentIdsByHW(prev => ({ ...prev, [activeHW?.id]: [...hwIds, s.stt] })); }} className={`border-b border-slate-100 cursor-pointer transition-colors duration-300 ${(viewedStudentIdsByHW[activeHW?.id] ?? [4]).includes(s.stt) ? 'bg-white' : 'bg-[#f3f4f6]'}`}>
@@ -314,13 +394,12 @@ export default function TeacherHomeworkTable({ userName }: { userName: string })
                           <td className="p-3 font-bold border-r border-slate-100 text-slate-700">{s.name}</td>
                           <td className={`p-3 text-center border-r border-slate-100 font-bold ${scoreColor(s.score, s.maxScore, lowGradeThreshold)}`}>{s.score.toFixed(1)}/{s.maxScore.toFixed(1)}</td>
                           <td className="p-3 text-center border-r border-slate-100 text-slate-500 font-medium">{s.subTimeShort}</td>
-                          <td className="p-3 border-r italic text-slate-600 leading-relaxed">{s.comment}</td>
-                          <td className="p-3 border-r border-slate-100 text-center">
+                          <td className="p-3 border-r border-slate-100 italic text-slate-600 leading-relaxed">{s.comment}</td>
+                          <td className="p-3 border-slate-100 text-center">
                             <div onClick={(e) => { e.stopPropagation(); setSelectedStaticStudent(s); }} className="w-8 h-10 mx-auto border border-slate-200 bg-white shadow-sm overflow-hidden cursor-pointer hover:ring-2 hover:ring-blue-400 transition-all">
                               <img src={s.images[0]} className="w-full h-full object-cover" />
                             </div>
                           </td>
-                          <td className="p-3 font-medium text-slate-700">{s.stt === 4 ? "Blook" : activeHW?.fullTitle.replace(".docx", "")}</td>
                         </tr>
                       ))}</tbody>
                     </table>
@@ -339,7 +418,7 @@ export default function TeacherHomeworkTable({ userName }: { userName: string })
                         <div className="bg-slate-50 rounded-lg p-3"><span className="text-slate-500">Thời gian:</span> <span className="font-medium">{new Date(selectedSubmission.graded_at).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}</span></div>
                       </div>
                       {(selectedSubmission.detailed_feedback || selectedSubmission.feedback) && <div className="mb-4"><h4 className="text-sm font-bold text-slate-700 mb-2">Nhận xét từ Cô Hana:</h4><p className="text-sm text-slate-600 bg-blue-50 rounded-lg p-3 leading-relaxed whitespace-pre-line">{selectedSubmission.detailed_feedback || selectedSubmission.feedback}</p></div>}
-                      {selectedSubmission.attachment_paths && selectedSubmission.attachment_paths.length > 0 && <div><h4 className="text-sm font-bold text-slate-700 mb-2">Ảnh bài tập đã nộp:</h4><div className="grid grid-cols-3 gap-4">{selectedSubmission.attachment_paths.map((p: string, i: number) => <div key={i} className="w-full aspect-3/4 border shadow-md bg-white overflow-hidden"><img src={`${API_BASE}/uploads/${p}`} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).src = '/BaiTapHS1_Demo.jpg'; }} /></div>)}</div></div>}
+                      {selectedSubmission.attachment_paths && selectedSubmission.attachment_paths.length > 0 && <div><h4 className="text-sm font-bold text-slate-700 mb-2">Ảnh bài tập đã nộp:</h4><div className="grid grid-cols-3 gap-4">{selectedSubmission.attachment_paths.map((p: string, i: number) => <a key={i} href={`${API_BASE}/uploads/${p}`} target="_blank" rel="noopener noreferrer" className="w-full aspect-3/4 border shadow-md bg-white overflow-hidden block cursor-zoom-in"><img src={`${API_BASE}/uploads/${p}`} alt="" className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).src = '/BaiTapHS1_Demo.jpg'; }} /></a>)}</div></div>}
                     </div>
                   </div>
                 )}
@@ -355,8 +434,8 @@ export default function TeacherHomeworkTable({ userName }: { userName: string })
                         <div className="bg-slate-50 rounded-lg p-3"><span className="text-slate-500">Điểm:</span> <span className={`font-bold ${scoreColor(selectedStaticStudent.score, selectedStaticStudent.maxScore, lowGradeThreshold)}`}>{selectedStaticStudent.score.toFixed(1)}/{selectedStaticStudent.maxScore.toFixed(1)}</span></div>
                         <div className="bg-slate-50 rounded-lg p-3"><span className="text-slate-500">Thời gian:</span> <span className="font-medium">{selectedStaticStudent.subTime}</span></div>
                       </div>
-                      <div className="mb-4"><h4 className="text-sm font-bold text-slate-700 mb-2">Nhận xét:</h4><p className="text-sm text-slate-600 bg-blue-50 rounded-lg p-3 leading-relaxed">{selectedStaticStudent.comment}</p></div>
-                      <div><h4 className="text-sm font-bold text-slate-700 mb-2">Ảnh bài tập đã nộp:</h4><div className="grid grid-cols-3 gap-4">{selectedStaticStudent.images.map((img: string, i: number) => <div key={i} className="w-full aspect-3/4 border shadow-md bg-white overflow-hidden"><img src={img} className="w-full h-full object-cover" /></div>)}</div></div>
+                      <div className="mb-4"><h4 className="text-sm font-bold text-slate-700 mb-2">Nhận xét chi tiết:</h4><p className="text-sm text-slate-600 bg-blue-50 rounded-lg p-3 leading-relaxed whitespace-pre-line">{selectedStaticStudent.detailedFeedback || selectedStaticStudent.comment}</p></div>
+                      <div><h4 className="text-sm font-bold text-slate-700 mb-2">Ảnh bài tập đã nộp:</h4><div className="grid grid-cols-3 gap-4">{selectedStaticStudent.images.map((img: string, i: number) => <a key={i} href={img} target="_blank" rel="noopener noreferrer" className="w-full aspect-3/4 border shadow-md bg-white overflow-hidden block cursor-zoom-in"><img src={img} alt="" className="w-full h-full object-cover" /></a>)}</div></div>
                     </div>
                   </div>
                 )}
