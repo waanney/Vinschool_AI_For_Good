@@ -139,7 +139,7 @@ app.add_middleware(
 async def root():
     return {
         "status": "Google Chat demo server running",
-        "usage": "Send /ask <question>, /grade, /dailysum, or /demosum in Google Chat",
+        "usage": "Send /ask <question>, /grade, /dailysum, or /help in Google Chat",
     }
 
 
