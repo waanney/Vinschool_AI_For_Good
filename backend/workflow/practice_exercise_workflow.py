@@ -379,8 +379,6 @@ class PracticeExerciseWorkflow:
             result["feedback"] = grading_result.feedback
             result["details"] = {
                 "criteria_scores": grading_result.criteria_scores,
-                "strengths": grading_result.strengths,
-                "improvements": grading_result.improvements,
             }
             
             logger.info(

@@ -25,8 +25,6 @@ class GradingResult(BaseModel):
     feedback: str  # concise for GChat reply & LMS table
     detailed_feedback: str = ""  # full paragraph for email & LMS detail
     criteria_scores: Dict[str, float] = Field(default_factory=dict)
-    strengths: List[str] = Field(default_factory=list)
-    improvements: List[str] = Field(default_factory=list)
 
 
 class GradingAgent(BaseAgent):
@@ -37,7 +35,6 @@ class GradingAgent(BaseAgent):
     - Grade homework against rubric
     - Extract text from images (OCR primary, Gemini vision fallback)
     - Provide detailed feedback
-    - Suggest improvements
     """
 
     SYSTEM_PROMPT = """You are Cô Hana, a caring and experienced primary-school teacher at Vinschool.
@@ -162,7 +159,7 @@ IMPORTANT RULES:
 - Write all text in proper Vietnamese with full diacritical marks
 - The TOTAL_SCORE must be computed from correct/total as described above
 - FEEDBACK: one concise sentence (max 100 chars) starting with "{short_name}", summarising how the student did. Include the count like "đúng X/Y câu". Write in proper Vietnamese with diacritical marks.
-- DETAILED_FEEDBACK: a paragraph (4-6 sentences) as Cô Hana speaking to the student. Write in proper Vietnamese with diacritical marks. Start with "Chào {short_name}" and sign off naturally. List which specific questions are correct and which are incorrect. Do NOT invent information not visible in the image. Do NOT use "cô/thầy" — always say "Cô Hana".
+- DETAILED_FEEDBACK: List each INCORRECT answer using ❌, organised by section/question number. For each error show: the student's wrong answer, explain briefly why it is wrong, and give the correct answer. After listing errors, add 1-2 encouraging closing sentences as Cô Hana. Write in proper Vietnamese with diacritical marks. Do NOT invent information not visible in the image. Do NOT use "cô/thầy" — always say "Cô Hana."
 - Preserve the student's name exactly as given (keep or omit diacritical marks as provided; do NOT add diacritical marks to a name that was given without them).
 
 Please read the student's handwritten work from the image and grade it.
@@ -175,15 +172,7 @@ FEEDBACK:
 [one short sentence in proper Vietnamese with diacritical marks, starting with "{short_name}", include correct/total count, max 100 chars]
 
 DETAILED_FEEDBACK:
-[paragraph from Cô Hana to the student, 4-6 sentences, proper Vietnamese with diacritical marks]
-
-STRENGTHS:
-- [strength 1]
-- [strength 2]
-
-IMPROVEMENTS:
-- [improvement 1]
-- [improvement 2]"""
+[list each incorrect answer with ❌, then 1-2 encouraging sentences as Cô Hana]"""
 
                 result = await self._agent.run(
                     [
@@ -224,7 +213,7 @@ IMPORTANT RULES:
 - Do NOT use any markdown formatting (no *, **, #, etc.)
 - Write all text in proper Vietnamese with full diacritical marks
 - FEEDBACK: one concise sentence (max 100 chars) starting with "{short_name}". Include the count like "đúng X/Y câu". Write in proper Vietnamese with diacritical marks.
-- DETAILED_FEEDBACK: a paragraph (4-6 sentences) as Cô Hana speaking to the student. Write in proper Vietnamese with diacritical marks.
+- DETAILED_FEEDBACK: List each INCORRECT answer using ❌, organised by section/question number. For each error show: the student's wrong answer, explain briefly why it is wrong, and give the correct answer. After listing errors, add 1-2 encouraging closing sentences as Cô Hana. Write in proper Vietnamese with diacritical marks. Do NOT invent information not visible in the image. Do NOT use "cô/thầy" — always say "Cô Hana."
 - Preserve the student's name exactly as given (do NOT add diacritical marks to a name given without them)
 
 Format your response as:
@@ -238,15 +227,7 @@ FEEDBACK:
 [one short sentence in proper Vietnamese with diacritical marks, starting with "{short_name}", include correct/total count, max 100 chars]
 
 DETAILED_FEEDBACK:
-[paragraph from Cô Hana, 4-6 sentences, proper Vietnamese with diacritical marks]
-
-STRENGTHS:
-- [strength 1]
-- [strength 2]
-
-IMPROVEMENTS:
-- [improvement 1]
-- [improvement 2]"""
+[list each incorrect answer with ❌, then 1-2 encouraging sentences as Cô Hana]"""
 
                 result = await self._agent.run(prompt)
 
@@ -339,37 +320,15 @@ IMPROVEMENTS:
             feedback = sections.get('FEEDBACK', '').strip()
             detailed_feedback = sections.get('DETAILED_FEEDBACK', '').strip()
 
-            # Extract strengths
-            strengths = []
-            if 'STRENGTHS' in sections:
-                strengths = [
-                    line.strip('- ').strip()
-                    for line in sections['STRENGTHS'].split('\n')
-                    if line.strip().startswith('-')
-                ]
-
-            # Extract improvements
-            improvements = []
-            if 'IMPROVEMENTS' in sections:
-                improvements = [
-                    line.strip('- ').strip()
-                    for line in sections['IMPROVEMENTS'].split('\n')
-                    if line.strip().startswith('-')
-                ]
-
             # Strip markdown artifacts from all text fields
             feedback = feedback.replace('*', '').replace('#', '').strip()
             detailed_feedback = detailed_feedback.replace('*', '').replace('#', '').strip()
-            strengths = [s.replace('*', '').strip() for s in strengths]
-            improvements = [i.replace('*', '').strip() for i in improvements]
 
             return GradingResult(
                 total_score=min(total_score, max_score),  # Cap at max
                 feedback=feedback,
                 detailed_feedback=detailed_feedback,
                 criteria_scores=criteria_scores,
-                strengths=strengths,
-                improvements=improvements,
             )
 
         except Exception as e:
