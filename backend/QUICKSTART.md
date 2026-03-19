@@ -1,4 +1,4 @@
-#  Quick Start Guide - Vinschool AI
+# Quick Start Guide - Vinschool AI
 
 ## Cách 1: Demo Nhanh (Không cần Docker)
 
@@ -22,6 +22,7 @@ python scripts/demo.py
 > **Note:** UV khuyên dùng cho local development. Docker build tự động dùng pip.
 
 **Demo script sẽ test:**
+
 - ✅ Teaching Assistant: Trả lời câu hỏi về phân số
 - ✅ Content Summarization: Tóm tắt bài học
 - ✅ Exercise Generation: Tạo bài tập cá nhân hóa
@@ -45,7 +46,7 @@ python scripts/demo.py
 
 ```bash
 # 1. Setup environment
-cpenv.example .env
+cp .env.example .env
 # Edit .env với API key
 
 # 2. Start services
@@ -106,9 +107,10 @@ curl -X POST "http://localhost:8000/api/student/homework/submit" \
 
 ---
 
-##  Chọn LLM Provider
+## Chọn LLM Provider
 
 ### OpenAI (Default)
+
 ```bash
 DEFAULT_PROVIDER=openai
 OPENAI_API_KEY=sk-your-key
@@ -116,6 +118,7 @@ DEFAULT_LLM_MODEL=gpt-4-turbo-preview
 ```
 
 ### Google Gemini (Khuyên dùng - free quota tốt)
+
 ```bash
 DEFAULT_PROVIDER=google
 GEMINI_API_KEY=your-gemini-key  # Get tại: https://aistudio.google.com/
@@ -123,6 +126,7 @@ DEFAULT_LLM_MODEL=gemini-2.5-pro
 ```
 
 ### Anthropic Claude
+
 ```bash
 DEFAULT_PROVIDER=anthropic
 ANTHROPIC_API_KEY=your-key
@@ -131,7 +135,7 @@ DEFAULT_LLM_MODEL=claude-3-opus-20240229
 
 ---
 
-##  Monitoring
+## Monitoring
 
 ```bash
 # View logs
@@ -165,7 +169,7 @@ uvicorn api.main:app --reload
 
 ---
 
-##  Troubleshooting
+## Troubleshooting
 
 **Lỗi: "OPENAI_API_KEY not configured"**
 → Check file `.env` có đúng API key chưa
@@ -185,4 +189,4 @@ uvicorn api.main:app --reload
 3. ✅ Upload real documents → build knowledge base
 4. ✅ Integrate frontend → build UI
 
-**Docs:** http://localhost:8000/docs
+**Docs:** [http://localhost:8000/docs](http://localhost:8000/docs)
