@@ -134,7 +134,7 @@ Cô mong con luyện thêm về quy đồng mẫu số để tránh nhầm lẫn
     },
     {
       stt: 2, name: "Trần Minh Khôi", score: 7.2, maxScore: 10.0, subTimeShort: "Jan 8, 2026", subTime: "15:00:00 8/1/2026",
-      images: ["/BaiTapHA1_Demo.jpg", "/BaiTapHA2_Demo.jpg", "/BaiTapHA3_Demo.jpg"],
+      images: ["/BaiTapHA1_Demo.jpg", "/BaiTapHA2_Demo.jpg"],
       comment: "Minh Khôi cần ôn thêm về phần cộng/trừ phân số cùng mẫu. Bài tập làm đúng 18/25 câu.",
       detailedFeedback: `Kết quả chấm bài:
 1. Cộng phân số cùng mẫu
@@ -156,7 +156,7 @@ Con cần chú ý rút gọn phân số sau khi tính và không nhân mẫu khi
     },
     {
       stt: 3, name: "Phạm Bách Hợp", score: 9.2, maxScore: 10.0, subTimeShort: "Jan 8, 2026", subTime: "15:00:00 8/1/2026",
-      images: ["/BaiTapHA1_Demo.jpg", "/BaiTapHA2_Demo.jpg", "/BaiTapHA3_Demo.jpg"],
+      images: ["/BaiTapHA1_Demo.jpg", "/BaiTapHA2_Demo.jpg", "/BaiTapHA3_Demo.jpg", "/BaiTapHA4_Demo.jpg"],
       comment: "Bách Hợp đã nắm chắc kiến thức, tuy nhiên cần chú ý phần sắp xếp thứ tự phân số. Bài tập làm đúng 23/25 câu.",
       detailedFeedback: `Kết quả chấm bài:
 1. Cộng/Trừ phân số: 10/10 câu đúng ✓ Xuất sắc!
@@ -174,7 +174,7 @@ Tổng kết: 23/25 câu đúng (9.2/10).
     },
     {
       stt: 4, name: "Nguyễn Hải Anh", score: 10.0, maxScore: 10.0, subTimeShort: "Jan 8, 2026", subTime: "15:00:00 8/1/2026",
-      images: ["/BaiTapHA1_Demo.jpg", "/BaiTapHA2_Demo.jpg", "/BaiTapHA3_Demo.jpg"],
+      images: ["/BaiTapHA1_Demo.jpg"],
       comment: "Hải Anh nắm kiến thức rất chắc. Bài tập làm đúng 100%.",
       detailedFeedback: `Kết quả chấm bài:
 1. Cộng phân số: 8/8 câu đúng ✓
