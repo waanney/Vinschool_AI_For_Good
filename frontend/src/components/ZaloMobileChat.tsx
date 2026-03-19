@@ -260,7 +260,7 @@ export const ZaloMobileChat: React.FC = () => {
             <div className="p-3 bg-white border-t flex items-center gap-3 pb-8">
                 <input
                     className="flex-1 bg-gray-100 rounded-full px-4 py-2 text-sm focus:outline-none placeholder: text-black"
-                    placeholder="/ask Bài tập Toán? · /dailysum · /demosum"
+                    placeholder="/dailysum"
                     value={inputText}
                     onChange={(e) => setInputText(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
