@@ -25,8 +25,6 @@ def _build_grading_text(
     max_score: float,
     feedback: str,
     detailed_feedback: str,
-    strengths: list[str] | None = None,
-    improvements: list[str] | None = None,
 ) -> str:
     """
     Build a plain-text summary of the grading result for embedding.
@@ -44,10 +42,6 @@ def _build_grading_text(
         parts.append(f"Nhận xét ngắn: {feedback}")
     if detailed_feedback:
         parts.append(f"Nhận xét chi tiết: {detailed_feedback}")
-    if strengths:
-        parts.append("Điểm mạnh: " + "; ".join(strengths))
-    if improvements:
-        parts.append("Cần cải thiện: " + "; ".join(improvements))
     return " ".join(parts)
 
 
@@ -60,8 +54,6 @@ async def store_grading_result(
     max_score: float,
     feedback: str,
     detailed_feedback: str = "",
-    strengths: list[str] | None = None,
-    improvements: list[str] | None = None,
     graded_at: str = "",
 ) -> bool:
     """
@@ -79,8 +71,6 @@ async def store_grading_result(
             max_score=max_score,
             feedback=feedback,
             detailed_feedback=detailed_feedback,
-            strengths=strengths,
-            improvements=improvements,
         )
 
         embedding = await generate_single_embedding(text)
@@ -89,8 +79,6 @@ async def store_grading_result(
             "assignment_title": assignment_title,
             "feedback": feedback,
             "detailed_feedback": detailed_feedback,
-            "strengths": strengths or [],
-            "improvements": improvements or [],
             "graded_at": graded_at,
         }
 

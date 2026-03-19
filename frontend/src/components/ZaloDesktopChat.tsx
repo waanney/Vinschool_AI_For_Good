@@ -177,19 +177,12 @@ export const ZaloDesktopChat: React.FC = () => {
                 if (res.ok) {
                     const data = await res.json();
 
-                    // Replace temp ID with the real backend ID so the poller won't re-add it
-                    if (data.user_msg_id) {
-                        fetchedIds.current.delete(tempId);
-                        fetchedIds.current.add(data.user_msg_id);
-                        setMessages(prev => prev.map(m =>
-                            m.id === tempId ? { ...m, id: data.user_msg_id } : m
-                        ));
-                    }
-
-                    // Add AI reply with backend ID
-                    if (data.reply && data.ai_msg_id) {
+                    // Add AI reply using a local ID — the backend no longer writes
+                    // chat replies to the store, so the poller will never see this
+                    // message and there is no risk of duplication.
+                    if (data.reply) {
                         const aiReply: Message = {
-                            id: data.ai_msg_id,
+                            id: `ai-local-${Date.now()}`,
                             sender: "Cô Hana (AI)",
                             content: (
                                 <div className="space-y-1">
@@ -205,7 +198,6 @@ export const ZaloDesktopChat: React.FC = () => {
                             isAI: true
                         };
                         setMessages(prev => [...prev, aiReply]);
-                        fetchedIds.current.add(data.ai_msg_id);
                     }
                 }
             } catch {
@@ -365,7 +357,7 @@ export const ZaloDesktopChat: React.FC = () => {
                     </div>
                     <textarea
                         className="w-full h-full bg-transparent border-none focus:outline-none text-[14px] resize-none px-2 text-gray-600 font-medium placeholder:text-gray-300"
-                        placeholder="/ask Bài tập Toán? · /dailysum · /demosum"
+                        placeholder="/dailysum"
                         value={inputText}
                         onChange={(e) => setInputText(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSendMessage())}

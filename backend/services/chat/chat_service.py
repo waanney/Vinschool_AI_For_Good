@@ -337,13 +337,7 @@ async def _fetch_grading_context(
             )
             if meta.get("detailed_feedback"):
                 lines.append(f"  Nhận xét chi tiết: {meta['detailed_feedback']}")
-            if meta.get("strengths"):
-                lines.append(f"  Điểm mạnh: {', '.join(meta['strengths'])}")
-            if meta.get("improvements"):
-                lines.append(
-                    f"  Cần cải thiện: {', '.join(meta['improvements'])}"
-                )
-        lines.append("[Hết ngữ cảnh bổ sung]")
+            lines.append("[Hết ngữ cảnh bổ sung]")
 
         logger.info(
             f"[CHAT] Injected {len(results)} grading result(s) "
@@ -414,8 +408,8 @@ class ChatService:
 
     Handles AI Q&A and daily summaries for two channels:
 
-    * **zalo** — parent-facing (``/ask``, ``/dailysum``, ``/demosum`` commands in Zalo clone UI)
-    * **gchat** — student-facing (``@BotName /ask``, ``/dailysum``, ``/demosum`` in Google Chat)
+    * **zalo** — parent-facing (``/dailysum`` command in Zalo clone UI)
+    * **gchat** — student-facing (``@BotName /ask``, ``/grade``, ``/dailysum`` in Google Chat)
 
     Each channel gets its own PydanticAI agent with a tailored system
     prompt and escalation behaviour.  Every command returns a single

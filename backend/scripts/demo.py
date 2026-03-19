@@ -243,16 +243,7 @@ async def demo_homework_grading():
     if result.detailed_feedback:
         print(f"\n📝 Detailed Feedback (Cô Hana):\n{result.detailed_feedback}")
     
-    if result.strengths:
-        print(f"\n💪 Strengths:")
-        for strength in result.strengths:
-            print(f"  - {strength}")
-    
-    if result.improvements:
-        print(f"\n📈 Areas for Improvement:")
-        for improvement in result.improvements:
-            print(f"  - {improvement}")
-    
+
     return result
 
 

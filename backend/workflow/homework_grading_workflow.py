@@ -57,7 +57,6 @@ class HomeworkGradingWorkflow:
             assignment: Assignment entity
             rubric: Grading rubric
             submission_file_path: Path to submission file (for images)
-            notify_student: Whether to notify student
             notify_teacher: Whether to notify teacher
 
         Returns:
@@ -102,8 +101,6 @@ class HomeworkGradingWorkflow:
             result["detailed_feedback"] = grading_result.detailed_feedback
             result["details"] = {
                 "criteria_scores": grading_result.criteria_scores,
-                "strengths": grading_result.strengths,
-                "improvements": grading_result.improvements,
             }
 
             logger.info(
@@ -118,7 +115,6 @@ class HomeworkGradingWorkflow:
                     assignment=assignment,
                     score=grading_result.total_score,
                     feedback=grading_result.detailed_feedback or grading_result.feedback,
-                    improvements=grading_result.improvements,
                     teacher_id=teacher_id,
                     teacher_name=teacher_name,
                     teacher_email=teacher_email,
@@ -150,7 +146,6 @@ class HomeworkGradingWorkflow:
             result = await self.grade_homework(
                 assignment=assignment,
                 rubric=rubric,
-                notify_student=False,  # Batch notification later
             )
             results.append(result)
 
@@ -205,7 +200,6 @@ class HomeworkGradingWorkflow:
         assignment: Assignment,
         score: float,
         feedback: str,
-        improvements: list[str],
         teacher_id: Optional[str] = None,
         teacher_name: Optional[str] = None,
         teacher_email: Optional[str] = None,
@@ -255,7 +249,6 @@ class HomeworkGradingWorkflow:
                 max_score=assignment.max_score,
                 threshold=settings.LOW_GRADE_THRESHOLD,
                 feedback=feedback,
-                areas_for_improvement=improvements,
             )
 
             results = await service.send(notification)

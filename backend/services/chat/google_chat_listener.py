@@ -10,9 +10,15 @@ four slash commands embedded in the message text:
                         stored in Milvus so students can later ``/ask`` about
                         their scores
 - ``/hw [môn]``       — Suggest supplementary homework based on the student's
-                        Milvus profile (strengths/weaknesses) and recent grades
-- ``/dailysum``       — AI-generated daily lesson summary
-- ``/demosum``        — hardcoded demo summary (no API cost)
+                        Milvus profile and recent grades
+- ``/dailysum``       — Hardcoded daily lesson summary
+
+Certain demo phrases are recognised for hardcoded responses:
+- ``/ask Cô ơi ngày mai có bài tập nào...`` → hardcoded
+- ``/ask Cô ơi con chưa hiểu tại sao thả...`` → hardcoded
+- ``/ask Cô ơi mai khai mạc Edurun...`` → hardcoded escalation + email
+- ``/ask Cô ơi cho con bài tập để luyện...`` → hardcoded
+- ``/grade Cô ơi chấm bài cộng trừ...`` → real grading flow with hardcoded result
 
 Any other message is silently ignored so the bot does not respond to
 every conversation in the shared space.
@@ -45,13 +51,99 @@ from config import settings
 from utils.logger import logger
 
 
+# ===== Demo / hardcoded response delay (seconds) =====
+HARDCODED_RESPONSE_DELAY = settings.CHAT_DEBOUNCE_SECONDS
+
+# ===== Demo phrase detection =====
+# Prefixes used to match demo phrases (case-insensitive, stripped).
+# Each entry: (prefix, response, escalate?)
+
+DEMO_ASK_PHRASES = [
+    {
+        "prefix": "cô ơi ngày mai có bài tập nào",
+        "response": """Chào con,
+Ngày mai (Thứ 2) là hạn nộp bài tập ESL Unit 7, pages 84-89 trong sách Workbook con nhé.
+Con nhớ hoàn thành và nộp bài đúng hạn nha!""",
+        "escalate": False,
+    },
+    {
+        "prefix": "cô ơi con chưa hiểu tại sao thả",
+        "response": """Chào con, đây là một câu hỏi rất hay và thú vị đó!
+
+Trong bài học con đã được học, khi dù rơi xuống, có hai lực chính tác dụng:
+ - Trọng lực (gravity) kéo dù xuống.
+ - Lực cản không khí (air resistance) đẩy lên trên.
+ Dù lớn có diện tích bề mặt lớn hơn nên chặn nhiều không khí hơn khi rơi. Vì vậy lực cản không khí mạnh hơn.
+Lực cản lớn hơn làm giảm tốc độ rơi. Không khí “đẩy ngược lại” mạnh hơn → dù rơi chậm hơn.
+Như vậy, chiếc dù lớn rơi chậm hơn vì diện tích lớn tạo ra lực cản không khí (air resistance) tác dụng lên nó lớn hơn.
+
+Nếu con còn gì không hiểu, con cứ hỏi cô nhé.""",
+        "escalate": False,
+    },
+    {
+        "prefix": "cô ơi mai khai mạc edurun",
+        "response": """Cô Hana chưa có thông tin về vấn đề này. Cô đã chuyển câu hỏi đến giáo viên chủ nhiệm, thầy/cô sẽ phản hồi sớm nhất nhé con!""",
+        "escalate": True,
+    },
+    {
+        "prefix": "cô ơi cho con bài tập để luyện",
+        "response": """Cô rất vui khi con muốn luyện tập thêm để nắm vững kiến thức này. Tinh thần học tập của con rất đáng khen!
+Dưới đây là link bài tập thêm để con luyện tập nhé:
+
+https://docs.google.com/document/d/1MI92CYi-ROlN50Qx1-xqLrkiWbpqtQ8e/edit
+
+Con hãy nhớ lại bài học nhé, bước quan trọng nhất là phải **quy đồng mẫu số** trước khi cộng hoặc trừ.
+
+Sau khi làm xong, nếu con muốn, con có thể gửi bài cho cô xem. Chúc con làm bài thật tốt nhé!""",
+        "escalate": False,
+    },
+]
+
+DEMO_GRADE_PREFIX = "cô ơi chấm bài cộng trừ"
+DEMO_GRADE_SCORE = 8.5
+DEMO_GRADE_FEEDBACK = "Nhìn chung con đã làm khá tốt bài tập này. Con hiểu được hầu hết các dạng bài và làm đúng nhiều câu. Tuy nhiên, vẫn còn một vài lỗi nhỏ liên quan đến cộng trừ phân số có mẫu số khác nhau và quy đồng mẫu số."
+DEMO_GRADE_DETAILED = """Kết quả chấm bài:
+1. Fraction Calculations
+c) 2/8 + 1/4 = 3/8 ❌
+1/4 = 2/8
+2/8 + 2/8 = 4/8 = 1/2
+
+d) 3/4 - 1/4 = 1/3 ❌
+Đúng phải là: 2/4 = 1/2
+
+2. Pizza Word Problems
+D: 1/2 pizza =
+8 x 1/2 = 4 slices
+Con ghi 3 slices ❌
+
+Ngoài những lỗi nhỏ trên, các phần còn lại con làm rất tốt, đặc biệt là các bài toán tình huống và ước lượng phân số.
+
+Cô mong con sẽ luyện thêm các bài cộng trừ phân số khác mẫu số để tránh nhầm lẫn khi quy đồng.
+
+Con có muốn làm thêm một vài bài tập luyện tập về cộng trừ phân số với mẫu số khác nhau không?"""
+
+
+def _match_demo_ask(question: str) -> Optional[dict]:
+    """Return the matching demo phrase dict, or None."""
+    q = question.lower().strip()
+    for phrase in DEMO_ASK_PHRASES:
+        if q.startswith(phrase["prefix"]):
+            return phrase
+    return None
+
+
+def _is_demo_grade(text_after_grade: str) -> bool:
+    """Check if the /grade command text matches the demo grade phrase."""
+    return text_after_grade.lower().strip().startswith(DEMO_GRADE_PREFIX)
+
+
 class GoogleChatListener:
     """
     Listens for Google Chat messages via Pub/Sub and replies via Chat REST API.
 
     This is a pull-based subscriber: it periodically pulls messages from
     a Pub/Sub subscription, processes slash commands (/ask, /grade,
-    /dailysum, /demosum), and replies inline.  All other messages are
+    /hw, /dailysum), and replies inline.  All other messages are
     silently ignored.
 
     Messages sent via /ask are debounced per-user (default 3s) so rapid
@@ -324,21 +416,7 @@ class GoogleChatListener:
 
     async def _handle_dailysum(self, event: dict) -> None:
         """
-        Handle the /dailysum command: generate an AI summary of today's
-        lessons and post it to the current Google Chat space.
-        """
-        space_name = event["space_name"]
-        thread_name = event["thread_name"]
-
-        # Generate AI summary (student-facing)
-        summary = await self.chat_service.summarize_daily(channel="gchat")
-
-        # Post the summary in the thread
-        await self._reply_to_chat(space_name, summary, thread_name)
-
-    async def _handle_demosum(self, event: dict) -> None:
-        """
-        Handle the /demosum command: post the hardcoded demo daily
+        Handle the /dailysum command: post the hardcoded daily
         lesson summary to the current Google Chat space.
         """
         from services.scheduler import DEMO_LESSON_CONTENT_STUDENTS
@@ -346,18 +424,21 @@ class GoogleChatListener:
         space_name = event["space_name"]
         thread_name = event["thread_name"]
 
+        await asyncio.sleep(HARDCODED_RESPONSE_DELAY)
         await self._reply_to_chat(space_name, DEMO_LESSON_CONTENT_STUDENTS, thread_name)
 
     async def _process_event(self, event: dict) -> None:
         """
         Process a parsed Google Chat event.
 
-        Responds to five commands:
-        - /ask <question>  — AI Q&A (debounced, student persona)
-        - /grade           — Grade submitted homework images
+        Responds to four commands:
+        - /ask <question>  — AI Q&A (debounced, student persona);
+                             certain demo phrases return hardcoded responses
+        - /grade           — Grade submitted homework images;
+                             demo phrase "Cô ơi chấm bài cộng trừ..." uses
+                             real grading flow with hardcoded result
         - /hw [môn]        — Suggest supplementary homework
-        - /dailysum        — AI-generated lesson summary for today
-        - /demosum         — hardcoded demo summary (no AI cost)
+        - /dailysum        — Hardcoded daily lesson summary
 
         All other messages are silently ignored so the bot doesn't respond
         to every conversation in the shared space.
@@ -377,23 +458,16 @@ class GoogleChatListener:
                 "/ask <câu hỏi> — Hỏi đáp AI (Cô Hana sẽ trả lời)\n"
                 "/grade — Chấm bài tập (đính kèm ảnh bài làm)\n"
                 "/hw [môn] — Gợi ý bài tập bổ sung (dựa trên hồ sơ học sinh)\n"
-                "/dailysum — Tóm tắt bài học hôm nay (AI tạo tự động)\n"
-                "/demosum — Xem bản tóm tắt mẫu (không tốn AI)\n"
+                "/dailysum — Tóm tắt bài học hôm nay\n"
                 "/help — Hiển thị danh sách lệnh này"
             )
             await self._reply_to_chat(space_name, help_text, thread_name)
             return
 
-        # /dailysum — AI-generated daily summary
+        # /dailysum — hardcoded daily summary
         if text.lower().startswith("/dailysum"):
             logger.info(f"[GCHAT] /dailysum from {event['user_name']}")
             await self._handle_dailysum(event)
-            return
-
-        # /demosum — hardcoded demo daily summary (no AI cost)
-        if text.lower().startswith("/demosum"):
-            logger.info(f"[GCHAT] /demosum from {event['user_name']}")
-            await self._handle_demosum(event)
             return
 
         # /grade — grade submitted homework images
@@ -422,6 +496,23 @@ class GoogleChatListener:
 
             logger.info(f"[GCHAT] /ask from {event['user_name']}: {question[:80]}")
 
+            # Check for demo phrases first
+            demo = _match_demo_ask(question)
+            if demo:
+                logger.info(f"[GCHAT] Demo phrase matched: {demo['prefix']}")
+                await asyncio.sleep(HARDCODED_RESPONSE_DELAY)
+                await self._reply_to_chat(space_name, demo["response"], thread_name)
+                if demo["escalate"]:
+                    from services.chat.chat_service import _send_escalation_email
+                    asyncio.create_task(
+                        _send_escalation_email(
+                            f"gchat-{user_id}",
+                            event["user_name"],
+                            question,
+                        )
+                    )
+                return
+
             # Add to debouncer — fires after quiet period
             await self._debouncer.add(
                 user_id=f"gchat-{user_id}",
@@ -440,25 +531,30 @@ class GoogleChatListener:
         Handle the /grade command: grade student-submitted images.
 
         Flow:
-        1. Validate attachments are present
-        2. Download attachment images to temp files
-        3. Grade using HomeworkGradingWorkflow
-        4. Store submission in submission_store
-        5. Reply with feedback in Google Chat
-        6. Send notification to teacher (low-grade alert if applicable)
+        1. Parse text after ``/grade`` — detect demo phrase
+        2. Validate attachments are present
+        3. Download attachment images to temp files
+        4. Grade using HomeworkGradingWorkflow (or hardcoded for demo)
+        5. Store submission in submission_store
+        6. Reply with feedback in Google Chat
+        7. Send notification to teacher (low-grade alert if applicable)
         """
         space_name = event["space_name"]
         thread_name = event["thread_name"]
         user_id = event["user_id"]
         user_name = event["user_name"]
         attachments = event.get("attachments", [])
+        text = event["text"].strip()
 
-        # Validate attachments
+        # Detect demo grade phrase
+        text_after_grade = text[6:].strip()  # strip "/grade"
+        is_demo = _is_demo_grade(text_after_grade)
+
+        # Validate attachments — both demo and real require images
         if not attachments:
             await self._reply_to_chat(
                 space_name,
-                "Vui lòng đính kèm hình ảnh bài tập sau /grade ạ.\n"
-                "Ví dụ: @Vinschool Bot /grade (kèm ảnh bài tập)",
+                "Vui lòng đính kèm hình ảnh bài tập ạ.",
                 thread_name,
             )
             return
@@ -507,49 +603,57 @@ class GoogleChatListener:
                 file_path=downloaded_paths[0],
             )
 
-            # Grade using workflow
-            from workflow.homework_grading_workflow import (
-                HomeworkGradingWorkflow,
-            )
+            if is_demo:
+                # Demo grade: skip AI, use hardcoded score/feedback
+                await asyncio.sleep(HARDCODED_RESPONSE_DELAY)
+                score = DEMO_GRADE_SCORE
+                feedback = DEMO_GRADE_FEEDBACK
+                detailed_feedback = DEMO_GRADE_DETAILED
+                details = {}
+            else:
+                # Real grade: call AI via workflow
+                from workflow.homework_grading_workflow import (
+                    HomeworkGradingWorkflow,
+                )
 
-            workflow = HomeworkGradingWorkflow()
-            rubric = workflow.create_standard_rubric(
-                "Mathematics", "homework"
-            )
+                workflow = HomeworkGradingWorkflow()
+                rubric = workflow.create_standard_rubric(
+                    "Mathematics", "homework"
+                )
 
-            grading_result = await workflow.grade_homework(
-                assignment=assignment,
-                rubric=rubric,
-                submission_file_path=downloaded_paths[0],
-                notify_teacher=True,
-                teacher_email=settings.TEACHER_EMAIL,
-                student_name=user_name,
-            )
+                grading_result = await workflow.grade_homework(
+                    assignment=assignment,
+                    rubric=rubric,
+                    submission_file_path=downloaded_paths[0],
+                    notify_teacher=True,
+                    teacher_email=settings.TEACHER_EMAIL,
+                    student_name=user_name,
+                )
+
+                score = grading_result.get("score", 0.0)
+                feedback = grading_result.get("feedback", "")
+                detailed_feedback = grading_result.get("detailed_feedback", "")
+                details = grading_result.get("details", {})
+                grading_error = grading_result.get("error", None)
+
+                # Sanitize feedback — if it contains raw error text
+                # (e.g. tesseract not found), replace with a clean message
+                has_error = (
+                    grading_error
+                    or "error" in feedback.lower()
+                    or "tesseract" in feedback.lower()
+                    or "not installed" in feedback.lower()
+                )
+                if has_error and score == 0.0:
+                    feedback = (
+                        "Cô Hana chưa thể đọc rõ bài tập trong ảnh.\n"
+                        "Vui lòng chụp lại rõ hơn và gửi lại ạ."
+                    )
+                    detailed_feedback = ""
+                    details = {}  # Clear error details
 
             # Store in submission store for LMS dashboard
             from services.chat.submission_store import add_submission
-
-            score = grading_result.get("score", 0.0)
-            feedback = grading_result.get("feedback", "")
-            detailed_feedback = grading_result.get("detailed_feedback", "")
-            details = grading_result.get("details", {})
-            grading_error = grading_result.get("error", None)
-
-            # Sanitize feedback — if it contains raw error text
-            # (e.g. tesseract not found), replace with a clean message
-            has_error = (
-                grading_error
-                or "error" in feedback.lower()
-                or "tesseract" in feedback.lower()
-                or "not installed" in feedback.lower()
-            )
-            if has_error and score == 0.0:
-                feedback = (
-                    "Cô Hana chưa thể đọc rõ bài tập trong ảnh.\n"
-                    "Vui lòng chụp lại rõ hơn và gửi lại ạ."
-                )
-                detailed_feedback = ""
-                details = {}  # Clear error details
 
             submission = add_submission(
                 student_id=user_id,
@@ -580,8 +684,6 @@ class GoogleChatListener:
                     max_score=assignment.max_score,
                     feedback=feedback,
                     detailed_feedback=detailed_feedback,
-                    strengths=details.get("strengths", []),
-                    improvements=details.get("improvements", []),
                     graded_at=submission["graded_at"],
                 )
             except Exception as milvus_err:
@@ -597,20 +699,8 @@ class GoogleChatListener:
             ]
             if feedback:
                 reply_parts.append(f"\nNhận xét:\n{feedback}")
-
-            strengths = details.get("strengths", [])
-            if strengths:
-                reply_parts.append(
-                    "\nĐiểm mạnh:\n"
-                    + "\n".join(f"- {s}" for s in strengths)
-                )
-
-            improvements = details.get("improvements", [])
-            if improvements:
-                reply_parts.append(
-                    "\nCần cải thiện:\n"
-                    + "\n".join(f"- {i}" for i in improvements)
-                )
+            if detailed_feedback:
+                reply_parts.append(f"\nChi tiết:\n{detailed_feedback}")
 
             reply_text = "\n".join(reply_parts)
             # Strip any markdown formatting characters
