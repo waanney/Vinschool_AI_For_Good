@@ -40,17 +40,47 @@ export default function TeacherHomeworkTable({ userName }: { userName: string })
   const [showSuccessToast, setShowSuccessToast] = useState(false); // Trạng thái hiện thông báo
 
   const [isEditing, setIsEditing] = useState(false);
-  const [generalComment, setGeneralComment] = useState(
-    "Quang Bách là một học sinh có năng lực Toán học rất tốt, đạt thành tích xuất sắc ở tất cả các Unit trong học kỳ I. Bách thành thạo trong việc phân tích và giải quyết các bài toán giải quyết vấn đề, luôn nhanh chóng xác định được các phép tính. Ở unit Hình Khối, đặc biệt là Bài 6 (3D shape), Bách thể hiện rõ khả năng phân tích và mô tả chính xác các thuộc tính của những hình khối hình học phức tạp. Con luôn làm bài cẩn thận, chính xác và thể hiện tinh thần học tập nghiêm túc, tận tâm."
-  );
   const commentRef = useRef<HTMLTextAreaElement>(null);
 
   // --- BỔ SUNG TRẠNG THÁI CHO MỤC TIÊU HỌC KÌ TIẾP THEO ---
   const [isEditingGoal, setIsEditingGoal] = useState(false);
-  const [nextSemesterGoal, setNextSemesterGoal] = useState(
-    "Quang Bách cần tiếp tục rèn luyện việc sử dụng chính xác các thuật ngữ Toán học khi trình bày, đặc biệt là trong việc phân biệt và vận dụng các khái niệm liên quan đến các dãy số khác nhau (ví dụ: dãy có hiệu số không đổi và dãy có tỉ số không đổi)."
-  );
   const goalRef = useRef<HTMLTextAreaElement>(null);
+
+  // --- DỮ LIỆU TỪNG HỌC SINH CHO BÁO CÁO TIẾN TRÌNH ---
+  const progressStudents = [
+    { name: "Cấn Trần Quang Bách" },
+    { name: "Bùi Minh Quân" },
+    { name: "Nguyễn Hải Anh" },
+    { name: "Phạm Bách Hợp" },
+    { name: "Trần Minh Khôi" },
+  ];
+
+  const studentProgressData: Record<string, { comment: string; goal: string }> = {
+    "Cấn Trần Quang Bách": {
+      comment: "Quang Bách là một học sinh có năng lực Toán học rất tốt, đạt thành tích xuất sắc ở tất cả các Unit trong học kỳ I. Bách thành thạo trong việc phân tích và giải quyết các bài toán giải quyết vấn đề, luôn nhanh chóng xác định được các phép tính. Ở unit Hình Khối, đặc biệt là Bài 6 (3D shape), Bách thể hiện rõ khả năng phân tích và mô tả chính xác các thuộc tính của những hình khối hình học phức tạp. Con luôn làm bài cẩn thận, chính xác và thể hiện tinh thần học tập nghiêm túc, tận tâm.",
+      goal: "Quang Bách cần tiếp tục rèn luyện việc sử dụng chính xác các thuật ngữ Toán học khi trình bày, đặc biệt là trong việc phân biệt và vận dụng các khái niệm liên quan đến các dãy số khác nhau (ví dụ: dãy có hiệu số không đổi và dãy có tỉ số không đổi).",
+    },
+    "Bùi Minh Quân": {
+      comment: "Bùi Minh Quân là học sinh có khả năng tư duy Toán học nổi bật, luôn đạt kết quả rất tốt trong các Unit của học kì I. Quân thể hiện sự nhanh nhạy khi phân tích đề bài và lựa chọn phép tính phù hợp để giải quyết vấn đề. Trong Unit Hình Khối, đặc biệt ở bài 3D Shapes, em đã mô tả chính xác các đặc điểm của nhiều dạng hình khối khác nhau. Quân luôn làm bài cẩn thận, chính xác và duy trì thái độ học tập nghiêm túc trong mỗi giờ học.",
+      goal: "Quân cần tiếp tục luyện tập việc phân tích và mô tả quy luật dãy số. Em nên chú ý phân biệt rõ các dạng dãy số khác nhau và giải thích được quy luật của dãy khi trình bày bài làm.",
+    },
+    "Nguyễn Hải Anh": {
+      comment: "Trong học kì I, Nguyễn Hải Anh thể hiện năng lực Toán học vững vàng và đạt kết quả cao ở nhiều Unit. Em học tốt các nội dung về Unit 3: Counting and sequences và Unit 4: Averages, khi có thể nhanh chóng nhận ra quy luật và thực hiện các phép tính chính xác. Bên cạnh đó, Hải Anh cũng hoàn thành tốt các nhiệm vụ học tập trong Unit 7: Fractions, decimals and percentages. Em học tập chăm chỉ và luôn tích cực tham gia các hoạt động trên lớp.",
+      goal: "Hải Anh cần tiếp tục rèn luyện việc sử dụng chính xác các thuật ngữ Toán học khi trình bày, đặc biệt là trong việc phân biệt và vận dụng các khái niệm liên quan đến các dãy số khác nhau (ví dụ: dãy có hiệu số không đổi và dãy có tỉ số không đổi).",
+    },
+    "Phạm Bách Hợp": {
+      comment: "Phạm Bách Hợp đạt thành tích nổi bật trong nhiều nội dung Toán học của học kì I. Em học tốt các kiến thức về Unit 1: The number system và Unit 3: Counting and sequences, khi có thể nhận biết quy luật và áp dụng vào giải bài tập. Bên cạnh đó, Bách Hợp cũng hoàn thành tốt các nội dung trong Unit 7: Fractions, decimals and percentages. Em có tinh thần học tập nghiêm túc và luôn cố gắng hoàn thiện bài làm của mình.",
+      goal: "Trong học kỳ tiếp theo, Bách Hợp nên rèn luyện thêm kỹ năng giải thích cách tính và trình bày kết quả. Việc trình bày rõ các bước tính toán sẽ giúp em thể hiện tốt hơn quá trình tư duy của mình.",
+    },
+    "Trần Minh Khôi": {
+      comment: "Trong học kì I, Trần Minh Khôi đạt kết quả học tập ở mức khá và thể hiện sự cố gắng trong các giờ học Toán. Em có thể phân tích đề bài và thực hiện các phép tính để giải quyết bài toán ở mức cơ bản. Ở Unit Hình Khối, đặc biệt là nội dung 3D Shapes, Khôi đã bước đầu nhận biết được các đặc điểm của hình khối không gian. Nếu tiếp tục luyện tập thường xuyên và tập trung hơn khi làm bài, em sẽ đạt kết quả tốt hơn trong thời gian tới.",
+      goal: "Trong học kỳ tới, Minh Khôi nên tiếp tục củng cố khả năng nhận diện và mô tả đặc điểm của các hình học trong Unit 6: 3D Shapes. Em cần luyện tập thêm việc sử dụng đúng các thuật ngữ hình học khi giải thích các quy luật của hình và mẫu hình để tăng sự chính xác trong phần trình bày.",
+    },
+  };
+
+  const [selectedProgressStudent, setSelectedProgressStudent] = useState("Cấn Trần Quang Bách");
+  const [generalComment, setGeneralComment] = useState(studentProgressData["Cấn Trần Quang Bách"].comment);
+  const [nextSemesterGoal, setNextSemesterGoal] = useState(studentProgressData["Cấn Trần Quang Bách"].goal);
 
   // --- QUẢN LÝ VIEW BÀI TẬP ---
   const [view, setView] = useState<'list' | 'detail' | 'images'>('list');
@@ -536,14 +566,14 @@ Cô rất tự hào về con. Hãy tiếp tục giữ vững phong độ nhé!`
               /* --- BÁO CÁO TIẾN TRÌNH --- */
               processView === 'select' ? (
                 <div className="p-10 flex space-x-6 items-end animate-in fade-in duration-500">
-                  <div className="flex-1"><label className="flex text-[11px] font-bold mb-2 text-slate-500 items-center"><span className="mr-1">🔍</span> Tên học sinh</label><select className="w-full p-3 border border-slate-200 rounded-xl bg-white text-sm outline-none focus:ring-2 focus:ring-blue-100 transition-all"><option>Cấn Trần Quang Bách</option></select></div>
+                  <div className="flex-1"><label className="flex text-[11px] font-bold mb-2 text-slate-500 items-center"><span className="mr-1">🔍</span> Tên học sinh</label><select value={selectedProgressStudent} onChange={(e) => setSelectedProgressStudent(e.target.value)} className="w-full p-3 border border-slate-200 rounded-xl bg-white text-sm outline-none focus:ring-2 focus:ring-blue-100 transition-all">{progressStudents.map(s => <option key={s.name} value={s.name}>{s.name}</option>)}</select></div>
                   <div className="flex-1"><label className="flex text-[11px] font-bold mb-2 text-slate-500 items-center"><span className="mr-1">🔍</span> Giai đoạn đánh giá</label><select className="w-full p-3 border border-slate-200 rounded-xl bg-white text-sm outline-none focus:ring-2 focus:ring-blue-100 transition-all"><option>Cuối học kì I</option></select></div>
-                  <button onClick={() => setProcessView('result')} className="bg-[#1e3a8a] text-white px-10 py-3 rounded-xl font-bold hover:bg-blue-900 transition-all shadow-md active:scale-95">Progress</button>
+                  <button onClick={() => { const data = studentProgressData[selectedProgressStudent]; setGeneralComment(data.comment); setNextSemesterGoal(data.goal); setIsApproved(false); setProcessView('result'); }} className="bg-[#1e3a8a] text-white px-10 py-3 rounded-xl font-bold hover:bg-blue-900 transition-all shadow-md active:scale-95">Progress</button>
                 </div>
               ) : (
                 /* HIỆN XANH LÁ NHẠT CHO TOÀN BỘ PHẦN KHUNG BÁO CÁO TIẾN TRÌNH KHI ĐÃ DUYỆT */
                 <div className={`p-6 animate-in slide-in-from-right duration-500 transition-colors ${isApproved ? 'bg-green-50' : ''}`}>
-                  <div className="flex items-center space-x-4 mb-6"><button onClick={() => setProcessView('select')} className="text-2xl font-bold hover:text-blue-700 transition-colors">❮</button><h2 className="text-xl font-bold text-slate-800 italic">Báo cáo cuối học kì I - Học sinh Cấn Trần Quang Bách VS081559</h2></div>
+                  <div className="flex items-center space-x-4 mb-6"><button onClick={() => setProcessView('select')} className="text-2xl font-bold hover:text-blue-700 transition-colors">❮</button><h2 className="text-xl font-bold text-slate-800 italic">Báo cáo cuối học kì I - Học sinh {selectedProgressStudent}</h2></div>
 
                   {/* BẢNG ĐIỂM UNIT */}
                   <div className="border border-slate-300 rounded-xl overflow-hidden bg-white shadow-sm mb-6">
