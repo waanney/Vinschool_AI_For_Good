@@ -36,7 +36,7 @@ Multi-agent AI system for educational support built with PydanticAI, Milvus, and
 - **Low Grade Alert**: Email to teacher when a student scores below threshold (default: 7.0/10.0)
 - **Daily Summary (Students)**: Hardcoded plain text summary sent to class Google Chat group
 - **Daily Summary (Parents)**: Hardcoded plain text summary sent to Zalo clone UI
-- **Automatic Scheduler**: `DailySummaryScheduler` fires at 18:00 every day (configurable via `DAILY_SUMMARY_HOUR`/`DAILY_SUMMARY_MINUTE`) to send the daily summary to both channels
+- **Automatic Scheduler**: `DailySummaryScheduler` fires at 18:00 Vietnam time every day (configurable via `DAILY_SUMMARY_HOUR`/`DAILY_SUMMARY_MINUTE`/`TIMEZONE`) to send the daily summary to both channels
 - **Workflow Integration**: `DailyContentWorkflow` automatically sends notifications after generating the AI summary
 - **Retry Logic**: Automatic retry with exponential backoff for failed deliveries
 
@@ -265,7 +265,7 @@ backend/
 │   │   ├── debouncer.py                   # Per-user message debouncing
 │   │   ├── google_chat_listener.py        # Pub/Sub consumer + Chat API replier
 │   │   └── submission_store.py            # In-memory store for /grade submissions
-│   ├── scheduler.py                # 6pm daily summary scheduler + /dailysum trigger
+│   ├── scheduler.py                # 6 pm (Vietnam time) daily summary scheduler + /dailysum trigger
 │   └── notification/               # Notification service
 │       ├── models.py                      # Notification data models
 │       ├── base.py                        # BaseNotifier interface
@@ -380,9 +380,10 @@ EMBEDDING_DIMENSION=768
 ENABLE_AUTO_GRADING=true
 TEACHER_ESCALATION_THRESHOLD=0.6
 
-# Daily Summary Scheduler (24-hour clock)
+# Daily Summary Scheduler (24-hour clock, in TIMEZONE)
 DAILY_SUMMARY_HOUR=18
 DAILY_SUMMARY_MINUTE=0
+TIMEZONE=Asia/Ho_Chi_Minh
 ```
 
 ### Notification Service Configuration
@@ -390,13 +391,13 @@ DAILY_SUMMARY_MINUTE=0
 The Notification Service sends **one-way** messages to teachers, students, and parents.
 Each notification type targets specific channels — there is no chat or reply.
 
-| Type                     | Channel(s)    | When it fires                                                                                            |
-| ------------------------ | ------------- | -------------------------------------------------------------------------------------------------------- |
-| Teacher Escalation       | Email (SMTP)  | AI not confident → email teacher with link to the Google Chat space                                      |
-| Low Grade Alert          | Email (SMTP)  | Student scores below threshold (default 7/10)                                                            |
-| Daily Summary (students) | Google Chat   | `DailyContentWorkflow` generates AI summary → text posted to class space                                 |
-| Daily Summary (parents)  | Zalo clone UI | Same AI summary → stored for REST polling                                                                |
-| Daily Summary (auto)     | Both channels | `DailySummaryScheduler` fires automatically at `DAILY_SUMMARY_HOUR:DAILY_SUMMARY_MINUTE` (default 18:00) |
+| Type                     | Channel(s)    | When it fires                                                                                                             |
+| ------------------------ | ------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| Teacher Escalation       | Email (SMTP)  | AI not confident → email teacher with link to the Google Chat space                                                       |
+| Low Grade Alert          | Email (SMTP)  | Student scores below threshold (default 7/10)                                                                             |
+| Daily Summary (students) | Google Chat   | `DailyContentWorkflow` generates AI summary → text posted to class space                                                  |
+| Daily Summary (parents)  | Zalo clone UI | Same AI summary → stored for REST polling                                                                                 |
+| Daily Summary (auto)     | Both channels | `DailySummaryScheduler` fires at `DAILY_SUMMARY_HOUR:DAILY_SUMMARY_MINUTE` in `TIMEZONE` (default 18:00 Asia/Ho_Chi_Minh) |
 
 #### Email (SMTP) Setup
 
