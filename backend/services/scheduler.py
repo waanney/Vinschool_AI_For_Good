@@ -2,8 +2,9 @@
 Daily summary scheduler.
 
 Fires automatically at DAILY_SUMMARY_HOUR:DAILY_SUMMARY_MINUTE (default 18:00)
-to send the hardcoded daily lesson summary to both Google Chat (students)
-and Zalo clone UI (parents).
+in the configured timezone (default ``Asia/Ho_Chi_Minh``) to send the
+hardcoded daily lesson summary to both Google Chat (students) and Zalo
+clone UI (parents).
 
 Also exposes shared demo lesson content constants:
 
@@ -18,6 +19,7 @@ to serve ``/dailysum`` responses.
 import asyncio
 from datetime import datetime, timedelta
 from typing import Optional
+from zoneinfo import ZoneInfo
 
 from config import settings
 from utils.logger import logger
@@ -203,18 +205,25 @@ async def trigger_daily_summary_demo(
 class DailySummaryScheduler:
     """
     Pure-asyncio background loop that fires ``trigger_daily_summary_demo``
-    once per day at the configured hour/minute.
+    once per day at the configured hour/minute in the configured timezone.
+
+    The timezone defaults to ``Asia/Ho_Chi_Minh`` (UTC+7) so that the
+    scheduler fires at the correct Vietnam local time regardless of the
+    server's system clock (which is typically UTC on cloud platforms such
+    as Render, Heroku, or AWS).
     """
 
-    def __init__(self, hour: int = 18, minute: int = 0):
+    def __init__(self, hour: int = 18, minute: int = 0, timezone: str = "Asia/Ho_Chi_Minh"):
         self._hour = hour
         self._minute = minute
+        self._tz = ZoneInfo(timezone)
+        self._tz_name = timezone
         self._running = False
         self._task: Optional[asyncio.Task] = None
 
     def seconds_until_next_fire(self) -> float:
-        """Return seconds from *now* until the next scheduled fire time."""
-        now = datetime.now()
+        """Return seconds from *now* until the next scheduled fire time in the configured timezone."""
+        now = datetime.now(self._tz)
         target = now.replace(
             hour=self._hour, minute=self._minute, second=0, microsecond=0,
         )
@@ -226,7 +235,7 @@ class DailySummaryScheduler:
         """Background loop: sleep until fire time, trigger, repeat."""
         logger.info(
             f"[SCHEDULER] Daily summary scheduled at "
-            f"{self._hour:02d}:{self._minute:02d} every day"
+            f"{self._hour:02d}:{self._minute:02d} {self._tz_name} every day"
         )
 
         while self._running:
@@ -282,5 +291,6 @@ def get_scheduler() -> DailySummaryScheduler:
         _scheduler = DailySummaryScheduler(
             hour=settings.DAILY_SUMMARY_HOUR,
             minute=settings.DAILY_SUMMARY_MINUTE,
+            timezone=settings.TIMEZONE,
         )
     return _scheduler
